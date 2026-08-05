@@ -33,3 +33,5 @@ models/
 *.mkv
 *.wav
 *.srt
+
+*.egg-info/
