@@ -53,6 +53,11 @@ Thumbs.db
 *.log
 logs/
 
+# Coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
 # jupyter notebook
 .ipynb_checkpoints/
 

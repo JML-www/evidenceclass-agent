@@ -1,0 +1,109 @@
+{
+  "analysisMode": "video",
+  "courseInfo": {
+    "courseName": "Synthetic lesson B",
+    "className": "Synthetic class",
+    "chapter": "Timeline sample",
+    "lessonTime": "synthetic",
+    "studentCount": 40
+  },
+  "observationGoal": "Exercise timeline and duration-based characterization rules.",
+  "sourceFiles": [
+    {
+      "name": "video-sample-001.mp4",
+      "type": "synthetic_video",
+      "durationSeconds": 2765
+    }
+  ],
+  "frames": [
+    {
+      "frame_id": "video_001",
+      "time": "00:02:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 35, "head_down_reading_or_writing": 1, "hand_raised": 0, "discussion": 0, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 0, "distracted": 2},
+      "teacher_behaviors": {"teaching": true, "patrolling": false, "guiding_students": false},
+      "classroom_stage": "introduction",
+      "evidence": ["Synthetic timeline observation 1."],
+      "confidence": 0.90
+    },
+    {
+      "frame_id": "video_002",
+      "time": "00:08:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 36, "head_down_reading_or_writing": 3, "hand_raised": 2, "discussion": 1, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 0, "distracted": 2},
+      "teacher_behaviors": {"teaching": true, "patrolling": false, "guiding_students": true},
+      "classroom_stage": "instruction",
+      "evidence": ["Synthetic timeline observation 2."],
+      "confidence": 0.91
+    },
+    {
+      "frame_id": "video_003",
+      "time": "00:15:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 34, "head_down_reading_or_writing": 2, "hand_raised": 8, "discussion": 2, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 1, "distracted": 3},
+      "teacher_behaviors": {"teaching": false, "patrolling": true, "guiding_students": true},
+      "classroom_stage": "interaction",
+      "evidence": ["Synthetic timeline observation 3."],
+      "confidence": 0.92
+    },
+    {
+      "frame_id": "video_004",
+      "time": "00:23:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 36, "head_down_reading_or_writing": 30, "hand_raised": 0, "discussion": 1, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 0, "distracted": 2},
+      "teacher_behaviors": {"teaching": true, "patrolling": true, "guiding_students": true},
+      "classroom_stage": "practice",
+      "evidence": ["Synthetic timeline observation 4."],
+      "confidence": 0.93
+    },
+    {
+      "frame_id": "video_005",
+      "time": "00:34:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 35, "head_down_reading_or_writing": 2, "hand_raised": 14, "discussion": 3, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 1, "distracted": 3},
+      "teacher_behaviors": {"teaching": false, "patrolling": true, "guiding_students": true},
+      "classroom_stage": "interaction",
+      "evidence": ["Synthetic timeline observation 5."],
+      "confidence": 0.94
+    },
+    {
+      "frame_id": "video_006",
+      "time": "00:43:00",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 37, "head_down_reading_or_writing": 34, "hand_raised": 0, "discussion": 0, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 0, "distracted": 2},
+      "teacher_behaviors": {"teaching": true, "patrolling": false, "guiding_students": false},
+      "classroom_stage": "practice",
+      "evidence": ["Synthetic timeline observation 6."],
+      "confidence": 0.95
+    },
+    {
+      "frame_id": "video_007",
+      "time": "00:45:30",
+      "estimated_total_students": 40,
+      "student_behaviors": {"focused": 36, "head_down_reading_or_writing": 1, "hand_raised": 10, "discussion": 1, "phone_use": 0, "sleeping_or_desk_down": 0, "left_seat": 1, "distracted": 2},
+      "teacher_behaviors": {"teaching": false, "patrolling": true, "guiding_students": true},
+      "classroom_stage": "summary",
+      "evidence": ["Synthetic timeline observation 7."],
+      "confidence": 0.94
+    }
+  ],
+  "regionHeatmap": {
+    "front": {"visibility": "visible", "focus": 91, "interaction": 84},
+    "middle": {"visibility": "visible", "focus": 88, "interaction": 76},
+    "back": {"visibility": "visible", "focus": 82, "interaction": 61}
+  },
+  "teacherBehaviorDurations": {
+    "teaching": 864,
+    "patrolling": 455,
+    "guiding": 398,
+    "blackboardWriting": 286,
+    "questioning": 344,
+    "usingSlides": 418
+  },
+  "teacherPositionDurations": {
+    "podium": 1700,
+    "front_zone": 420,
+    "middle_zone": 400,
+    "back_zone": 245
+  }
+}

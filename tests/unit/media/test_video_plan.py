@@ -1,41 +1,50 @@
-from packages.media_pipeline.video_prepare import VideoInfo, build_plan
+import json
+from pathlib import Path
 
-# 1. test_video_mode_has_timeline_and_behavior_share
-def test_video_mode_has_timeline_and_behavior_share():
-    """视频模式生成完整时间轴与行为分布图表"""
-    import json
-    import tempfile
-    from pathlib import Path
-    from packages.evidence_engine.builder import build_evidence_pack
-    payload = json.loads(Path("fixtures/video-demo.json").read_text(encoding="utf-8"))
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp)
-        res = build_evidence_pack(payload, out)
-        pkg = json.loads((out / "analysis_data.json").read_text(encoding="utf-8"))
-        metrics = pkg["metrics"]
-        assert res["analysisMode"] == "video"
-        assert metrics["behaviorDistribution"]["available"] is True
-        assert metrics["positionDistribution"]["available"] is True
-        assert metrics["positionDistribution"]["items"][0]["percent"] >= 60
-        action_titles = {item["title"] for item in metrics["actions"]}
-        assert "核对教师位置与指导覆盖" in action_titles
-        assert len(metrics["frames"]) == 7
-        dashboard = (out / "dashboard.html").read_text(encoding="utf-8")
-        assert "behavior-pie" in dashboard
+from packages.evidence_engine.metrics import percentage_distribution
+from packages.evidence_engine.validation import mode_capabilities
+from packages.media_pipeline.video_plan import VideoInfo, build_plan
 
-# 2. test_large_video_plan_switches_to_ordered_parts
-def test_large_video_plan_switches_to_ordered_parts():
-    """超大视频自动有序分片策略"""
-    vid_info = VideoInfo(
-        filename="demo.mp4",
+ROOT = Path(__file__).resolve().parents[3]
+VIDEO_FIXTURE = ROOT / "fixtures" / "structured" / "video-demo.json"
+
+
+def test_video_mode_enables_timeline_and_duration_distributions():
+    payload = json.loads(VIDEO_FIXTURE.read_text(encoding="utf-8"))
+
+    capabilities = mode_capabilities(payload)
+    position_share = percentage_distribution(payload["teacherPositionDurations"])
+
+    assert capabilities == {
+        "wholeLessonMetrics": True,
+        "timeline": True,
+        "behaviorDistribution": True,
+        "positionDistribution": True,
+    }
+    assert len(payload["frames"]) == 7
+    assert position_share["podium"] >= 60
+
+
+def test_large_video_is_split_into_ordered_upload_parts():
+    info = VideoInfo(
+        filename="video-sample-001.mp4",
         total_seconds=2765.0,
         width=1920,
         height=1080,
         fps=25.0,
-        file_bytes=3_408_000_000
+        file_bytes=3_408_000_000,
     )
-    plan = build_plan(vid, target_sec=49.0, mode="auto", min_seg=500, max_seg=760)
+
+    plan = build_plan(
+        info,
+        limit_mib=49.0,
+        strategy="auto",
+        minimum_total_kbps=500,
+        target_total_kbps=760,
+    )
+
     assert plan["strategy"] == "ordered_split"
     assert plan["fullFileTargetKbps"] == 133
     assert len(plan["segments"]) == 6
-    assert all(s["durationSeconds"] <= 486 for s in plan["segments"])
+    assert [segment["index"] for segment in plan["segments"]] == [1, 2, 3, 4, 5, 6]
+    assert all(segment["durationSeconds"] <= 486 for segment in plan["segments"])

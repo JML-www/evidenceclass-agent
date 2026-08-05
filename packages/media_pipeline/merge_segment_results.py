@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 from collections import Counter
 from copy import deepcopy
@@ -38,7 +37,9 @@ def unique(items: list[Any]) -> list[Any]:
 
 def weighted(values: list[tuple[float, float]]) -> float | None:
     valid = [(value, weight) for value, weight in values if weight > 0]
-    return sum(value * weight for value, weight in valid) / sum(weight for _, weight in valid) if valid else None
+    if not valid:
+        return None
+    return sum(value * weight for value, weight in valid) / sum(weight for _, weight in valid)
 
 
 def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -46,8 +47,16 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
         raise ValueError("At least one segment result is required.")
     for item in results:
         if item.get("analysisMode") != "video" or not isinstance(item.get("segment"), dict):
-            raise ValueError("Every segment result must use video mode and contain segment metadata.")
-    ordered = sorted(results, key=lambda item: (float(item["segment"]["startSeconds"]), int(item["segment"]["index"])))
+            raise ValueError(
+                "Every segment result must use video mode and contain segment metadata."
+            )
+    ordered = sorted(
+        results,
+        key=lambda item: (
+            float(item["segment"]["startSeconds"]),
+            int(item["segment"]["index"]),
+        ),
+    )
     indices = [int(item["segment"]["index"]) for item in ordered]
     if len(indices) != len(set(indices)):
         raise ValueError("Segment indexes must be unique.")
@@ -61,10 +70,15 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
 
     base = ordered[0]
     merged: dict[str, Any] = {
-        "analysisMode": "video", "courseInfo": deepcopy(base["courseInfo"]),
+        "analysisMode": "video",
+        "courseInfo": deepcopy(base["courseInfo"]),
         "observationGoal": base.get("observationGoal", "分段视频合并课堂观察"),
-        "sourceFiles": [], "frames": [], "regionHeatmap": {}, "asrSummary": {},
-        "teacherBehaviorDurations": {}, "teachingContent": {},
+        "sourceFiles": [],
+        "frames": [],
+        "regionHeatmap": {},
+        "asrSummary": {},
+        "teacherBehaviorDurations": {},
+        "teachingContent": {},
         "mergeMetadata": {"segmentCount": len(ordered), "orderedIndexes": indices},
     }
     for item in ordered:
@@ -74,26 +88,44 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
         merged["sourceFiles"].extend(deepcopy(item.get("sourceFiles") or []))
         for frame in item.get("frames") or []:
             copy = deepcopy(frame)
-            copy["frame_id"] = f"segment_{index:02d}_{copy.get('frame_id', len(merged['frames'])+1)}"
+            source_frame_id = copy.get("frame_id", len(merged["frames"]) + 1)
+            copy["frame_id"] = f"segment_{index:02d}_{source_frame_id}"
             if segment.get("timeBasis", "relative") == "relative":
                 copy["time"] = format_time(start + parse_time(str(copy.get("time", "00:00:00"))))
             copy["segment_index"] = index
             merged["frames"].append(copy)
 
     duration_weights = [float(item["segment"]["durationSeconds"]) for item in ordered]
-    asr_sum_keys = ("teacherQuestionCount", "studentAnswerCount", "discussionSegments", "teacherTalkMinutes")
+    asr_sum_keys = (
+        "teacherQuestionCount",
+        "studentAnswerCount",
+        "discussionSegments",
+        "teacherTalkMinutes",
+    )
     for key in asr_sum_keys:
         values = [float(item.get("asrSummary", {}).get(key, 0)) for item in ordered]
         if any(values):
             merged["asrSummary"][key] = sum(values)
     for key in ("teacherTalkRatio", "waitTimeSecondsAverage"):
-        value = weighted([(float(item.get("asrSummary", {}).get(key, 0)), weight) for item, weight in zip(ordered, duration_weights) if key in item.get("asrSummary", {})])
+        value = weighted(
+            [
+                (float(item.get("asrSummary", {}).get(key, 0)), weight)
+                for item, weight in zip(ordered, duration_weights, strict=True)
+                if key in item.get("asrSummary", {})
+            ]
+        )
         if value is not None:
             merged["asrSummary"][key] = value
-    speech = weighted([
-        (float(item.get("asrSummary", {}).get("speechRateWpm", 0)), float(item.get("asrSummary", {}).get("teacherTalkMinutes", weight / 60)))
-        for item, weight in zip(ordered, duration_weights) if "speechRateWpm" in item.get("asrSummary", {})
-    ])
+    speech = weighted(
+        [
+            (
+                float(item.get("asrSummary", {}).get("speechRateWpm", 0)),
+                float(item.get("asrSummary", {}).get("teacherTalkMinutes", weight / 60)),
+            )
+            for item, weight in zip(ordered, duration_weights, strict=True)
+            if "speechRateWpm" in item.get("asrSummary", {})
+        ]
+    )
     if speech is not None:
         merged["asrSummary"]["speechRateWpm"] = speech
     fillers: Counter[str] = Counter()
@@ -102,7 +134,8 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
         fillers.update(item.get("asrSummary", {}).get("fillerWords") or {})
         quotes.extend(str(value) for value in item.get("asrSummary", {}).get("notableQuotes") or [])
         for key, value in (item.get("teacherBehaviorDurations") or {}).items():
-            merged["teacherBehaviorDurations"][key] = merged["teacherBehaviorDurations"].get(key, 0) + float(value)
+            current = merged["teacherBehaviorDurations"].get(key, 0)
+            merged["teacherBehaviorDurations"][key] = current + float(value)
     if fillers:
         merged["asrSummary"]["fillerWords"] = dict(fillers)
     if quotes:
@@ -110,24 +143,62 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
 
     for region in ("front", "middle", "back"):
         samples = []
-        for item, weight in zip(ordered, duration_weights):
+        for item, weight in zip(ordered, duration_weights, strict=True):
             value = (item.get("regionHeatmap") or {}).get(region) or {}
             if value.get("visibility") in {"visible", "partial"}:
                 samples.append((value, weight))
         if not samples:
-            merged["regionHeatmap"][region] = {"visibility": "not_visible", "focus": None, "interaction": None}
+            merged["regionHeatmap"][region] = {
+                "visibility": "not_visible",
+                "focus": None,
+                "interaction": None,
+            }
         else:
-            visibility = "visible" if all(value.get("visibility") == "visible" for value, _ in samples) else "partial"
-            focus = weighted([(float(value["focus"]), weight) for value, weight in samples if value.get("focus") is not None])
-            interaction = weighted([(float(value["interaction"]), weight) for value, weight in samples if value.get("interaction") is not None])
-            merged["regionHeatmap"][region] = {"visibility": visibility, "focus": focus, "interaction": interaction}
+            all_visible = all(value.get("visibility") == "visible" for value, _ in samples)
+            visibility = "visible" if all_visible else "partial"
+            focus = weighted(
+                [
+                    (float(value["focus"]), weight)
+                    for value, weight in samples
+                    if value.get("focus") is not None
+                ]
+            )
+            interaction = weighted(
+                [
+                    (float(value["interaction"]), weight)
+                    for value, weight in samples
+                    if value.get("interaction") is not None
+                ]
+            )
+            merged["regionHeatmap"][region] = {
+                "visibility": visibility,
+                "focus": focus,
+                "interaction": interaction,
+            }
 
-    content_lists = ("knowledgePoints", "teachingMethods", "lessonSegments", "skillHighlights", "skillGaps", "skillRecommendations")
+    content_lists = (
+        "knowledgePoints",
+        "teachingMethods",
+        "lessonSegments",
+        "skillHighlights",
+        "skillGaps",
+        "skillRecommendations",
+    )
     for key in content_lists:
-        merged["teachingContent"][key] = unique([
-            value for item in ordered for value in (item.get("teachingContent", {}).get(key) or [])
-        ])
-    summaries = unique([str(item.get("teachingContent", {}).get("courseSummary")) for item in ordered if item.get("teachingContent", {}).get("courseSummary")])
+        merged["teachingContent"][key] = unique(
+            [
+                value
+                for item in ordered
+                for value in (item.get("teachingContent", {}).get(key) or [])
+            ]
+        )
+    summaries = unique(
+        [
+            str(item.get("teachingContent", {}).get("courseSummary"))
+            for item in ordered
+            if item.get("teachingContent", {}).get("courseSummary")
+        ]
+    )
     if summaries:
         merged["teachingContent"]["courseSummary"] = "；".join(summaries)
     for key in ("bloomQuestions", "fourWhatQuestions"):
@@ -139,30 +210,25 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
-def load_builder(script: Path):
-    spec = importlib.util.spec_from_file_location("build_evidence_pack", script)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("Cannot load the evidence-pack builder.")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Merge ordered segment observation JSON files.")
     parser.add_argument("results", nargs="+", type=Path, help="Segment observation JSON files.")
-    parser.add_argument("--output-json", type=Path, required=True, help="Merged video-mode input JSON.")
-    parser.add_argument("--pack-output", type=Path, help="Optionally build the final five-file report pack.")
+    parser.add_argument(
+        "--output-json", type=Path, required=True, help="Merged video-mode input JSON."
+    )
     args = parser.parse_args()
     try:
         payloads = [json.loads(path.read_text(encoding="utf-8-sig")) for path in args.results]
         merged = merge(payloads)
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
-        args.output_json.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        result: dict[str, Any] = {"mergedInput": str(args.output_json.resolve()), "segments": len(payloads), "frames": len(merged["frames"])}
-        if args.pack_output:
-            builder = load_builder(Path(__file__).resolve().parent / "build_evidence_pack.py")
-            result["pack"] = builder.build(args.output_json.resolve(), args.pack_output.resolve())
+        args.output_json.write_text(
+            json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        result: dict[str, Any] = {
+            "mergedInput": str(args.output_json.resolve()),
+            "segments": len(payloads),
+            "frames": len(merged["frames"]),
+        }
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
         parser.exit(2, f"error: {exc}\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))

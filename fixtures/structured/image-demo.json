@@ -1,0 +1,67 @@
+{
+  "analysisMode": "image",
+  "courseInfo": {
+    "courseName": "Synthetic lesson A",
+    "className": "Synthetic class",
+    "chapter": "Observation sample",
+    "lessonTime": "current image",
+    "studentCount": 24
+  },
+  "observationGoal": "Describe only facts visible in the current synthetic image observation.",
+  "sourceFiles": [
+    {
+      "name": "image-sample-001.jpg",
+      "type": "image"
+    }
+  ],
+  "frames": [
+    {
+      "frame_id": "image_001",
+      "time": "current image",
+      "visible_student_count": 18,
+      "student_behaviors": {
+        "focused": 15,
+        "head_down_reading_or_writing": 5,
+        "hand_raised": 2,
+        "discussion": 0,
+        "distracted": 2
+      },
+      "teacher_behaviors": {
+        "teaching": true,
+        "blackboard_writing": false,
+        "patrolling": false,
+        "questioning": null,
+        "organizing_discussion": null,
+        "guiding_students": false,
+        "using_slides": true
+      },
+      "classroom_stage": "current image",
+      "evidence": [
+        "The synthetic observation contains eighteen visible student figures.",
+        "Two visible figures have a raised-hand marker."
+      ],
+      "limitations": [
+        "The synthetic observation has no timeline.",
+        "The back region is outside the visible area."
+      ],
+      "confidence": 0.88
+    }
+  ],
+  "regionHeatmap": {
+    "front": {
+      "visibility": "visible",
+      "focus": 86,
+      "interaction": 24
+    },
+    "middle": {
+      "visibility": "partial",
+      "focus": 78,
+      "interaction": 18
+    },
+    "back": {
+      "visibility": "not_visible",
+      "focus": null,
+      "interaction": null
+    }
+  }
+}

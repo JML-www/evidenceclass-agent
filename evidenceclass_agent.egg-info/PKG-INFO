@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: evidenceclass-agent
-Version: 0.1.0
-Requires-Dist: pydantic>=2.0
-Provides-Extra: dev
-Requires-Dist: pytest; extra == "dev"
-Requires-Dist: pytest-cov; extra == "dev"
-Requires-Dist: hypothesis; extra == "dev"
-Requires-Dist: ruff; extra == "dev"

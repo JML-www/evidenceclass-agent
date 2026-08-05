@@ -1,7 +1,0 @@
-pydantic>=2.0
-
-[dev]
-pytest
-pytest-cov
-hypothesis
-ruff
