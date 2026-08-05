@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evidenceclass-agent"
+version = "0.1.0"
+dependencies = [
+  "pydantic>=2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "hypothesis",
+  "ruff"
+]
+
+# 只放 packages 列表，不要写 package_dir
+[tool.setuptools]
+packages = [
+  "packages.contracts",
+  "packages.evidence_engine",
+  "packages.media_pipeline",
+  "packages.model_gateway",
+  "packages.agent_runtime",
+  "packages.retrieval",
+  "apps.api",
+  "apps.worker"
+]
+
+# package-dir 单独分一张表，合规写法
+[tool.setuptools.package-dir]
+packages = "packages"
+apps = "apps"

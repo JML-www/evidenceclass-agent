@@ -1,0 +1,35 @@
+# Python虚拟环境
+.venv/
+
+# Python编译缓存
+__pycache__/
+*.py[cod]
+
+# 测试缓存
+.pytest_cache/
+
+# ruff linter缓存
+.ruff_cache/
+
+# 环境变量，忽略真实密钥，保留示例模板
+.env
+.env.*
+!.env.example
+
+# 前端依赖
+node_modules/
+
+# 打包输出
+dist/
+
+# 本地存储、训练输出
+storage/
+runs/
+models/
+
+# 媒体大文件
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.srt
