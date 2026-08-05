@@ -1,9 +1,12 @@
 # Python虚拟环境
 .venv/
+venv/
+env/
 
 # Python编译缓存
 __pycache__/
 *.py[cod]
+*$py.class
 
 # 测试缓存
 .pytest_cache/
@@ -16,11 +19,14 @@ __pycache__/
 .env.*
 !.env.example
 
+# Python包构建元信息
+*.egg-info/
+*.egg
+dist/
+build/
+
 # 前端依赖
 node_modules/
-
-# 打包输出
-dist/
 
 # 本地存储、训练输出
 storage/
@@ -34,4 +40,21 @@ models/
 *.wav
 *.srt
 
-*.egg-info/
+# IDE项目配置
+.idea/
+.vscode/
+*.iml
+
+# 操作系统垃圾文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+logs/
+
+# jupyter notebook
+.ipynb_checkpoints/
+
+# mypy类型检查缓存
+.mypy_cache/
