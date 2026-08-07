@@ -19,5 +19,6 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone stops at tutorial step 2.1: it freezes deterministic behavior as
-characterization tests. No Agent behavior is claimed yet.
+The current milestone stops at tutorial step 2.2: it freezes deterministic behavior as
+characterization tests and defines contracts v0.1 for cross-module data. The evidence engine
+decomposition and all Agent behavior remain future work; no Agent behavior is claimed yet.
