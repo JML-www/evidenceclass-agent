@@ -19,6 +19,9 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone stops at tutorial step 2.2: it freezes deterministic behavior as
-characterization tests and defines contracts v0.1 for cross-module data. The evidence engine
-decomposition and all Agent behavior remain future work; no Agent behavior is claimed yet.
+The current milestone completes tutorial phase 2. The deterministic engine is split into pure
+validation, metrics, scoring, evidence, actions, and result-building modules. Presentation-only
+renderers consume one canonical result, while `EvidenceEngineService` owns file I/O and the CLI
+owns process exit behavior. A future Worker and Agent tool must call the service in-process rather
+than launch the CLI as a subprocess. All Agent behavior remains future work; no Agent behavior is
+claimed yet.

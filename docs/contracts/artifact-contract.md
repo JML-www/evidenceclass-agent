@@ -22,8 +22,8 @@ numeric observations, image inputs cannot claim whole-lesson duration, behavior 
 exceed visible students, teacher speaking ratio requires speaker diarization, and an unsourced
 rubric cannot produce an overall score. Validation failures point to the offending field.
 
-The following legacy output-role list remains a characterization source until renderers are
-implemented in tutorial step 2.3:
+The phase-2 engine implements the following output-role contract from one canonical semantic
+result:
 
 Required artifacts:
 
@@ -33,7 +33,9 @@ Required artifacts:
 - `action_and_retest.csv`
 - `analysis_data.json`
 
-Legacy renderers must continue to emit `analysisMode` as `image` or `video`; new Python modules
-use the typed `analysis_mode` field at contract boundaries.
+The canonical JSON artifact emits `analysisMode` as `image` or `video`; typed Python contracts
+use the `analysis_mode` field at module boundaries.
 
-Renderers may format deterministic results but must not recalculate metrics.
+Renderers format deterministic results but do not import or call metric functions. The service
+reports a SHA-256 hash and byte size for every artifact after writing. It overwrites only these
+five managed names and never cleans unrelated output files.

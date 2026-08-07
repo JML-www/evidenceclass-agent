@@ -36,3 +36,11 @@ edited during this audit.
 When rights cannot be established, the default decision is exclusion. Synthetic fixtures in
 `fixtures/structured/` were rewritten with generic course data and filenames; they contain no
 names, student IDs, local paths, screenshots, or media bytes.
+
+## Phase 2 clean-room result
+
+As of 2026-08-07, the new repository implements the written validation, metric, evidence,
+artifact-role, and CLI requirements as independently organized modules. The legacy monolithic
+generator and its dashboard template were not copied. All migrated behavior remains attributable
+to the characterization matrix, synthetic fixtures, contract tests, or explicit phase-2
+requirements.

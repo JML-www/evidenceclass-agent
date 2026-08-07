@@ -20,6 +20,7 @@ Baseline: `lingmou-classroom-evidence-v3/tests/test_pipeline.py`, SHA-256 record
 | 13 | `test_methodology_reference_documents_validation_boundary` | `test_methodology_states_validation_and_accuracy_boundaries` | `test_evidence.py` | Keeps citations and no-accuracy claim |
 | 14 | `test_showcase_windows_preserve_global_context` | `test_showcase_windows_keep_global_timeline_offsets` | `test_artifacts.py` | Preserves global offsets without media |
 
-The matrix intentionally does not migrate the monolithic report builder or dashboard template.
-Those are later rewrite tasks. Formula tests are active now: changing the lower-bound calculation
-from `max` to `sum` makes the corresponding targeted test fail.
+The matrix intentionally does not copy the monolithic report builder or dashboard template.
+Phase 2 later supplied new presentation-only renderers from the written artifact roles. Formula
+tests remain active: changing the lower-bound calculation from `max` to `sum` makes the
+corresponding targeted test fail.
