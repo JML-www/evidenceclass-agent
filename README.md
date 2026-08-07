@@ -3,9 +3,10 @@
 EvidenceClass Agent is an in-progress system for turning authorized, anonymized classroom
 media into traceable observations, deterministic metrics, review tasks, and reports.
 
-The repository currently contains the clean project skeleton and the migrated v3.1
-characterization suite. It does not yet contain versioned Pydantic contracts, a complete
-evidence engine, model calls, an Agent runtime, an API, or a Web application.
+The repository currently contains the clean project skeleton, the migrated v3.1
+characterization suite, and strict Pydantic contracts v0.1 for requests, observations,
+evidence, results, and artifact manifests. It does not yet contain a complete evidence engine,
+model calls, an Agent runtime, an API, or a Web application.
 
 ## Current boundary
 
@@ -14,8 +15,9 @@ evidence engine, model calls, an Agent runtime, an API, or a Web application.
   human interruption.
 - AI capability layer: planned only; it will contain replaceable ASR, OCR, VLM, LLM, embedding,
   and reranking adapters.
-- Deterministic layer: characterization tests and selected media/metric pure functions are in
-  progress; this layer owns validation, metrics, evidence, hashes, and artifact consistency.
+- Deterministic layer: characterization tests, contracts v0.1, and selected media/metric pure
+  functions are implemented; this layer owns validation, metrics, evidence, hashes, and artifact
+  consistency.
 
 ## Development setup
 
