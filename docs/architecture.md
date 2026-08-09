@@ -19,8 +19,8 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone completes the code boundary for tutorial phase 3. The deterministic engine
-remains independent, while SQLAlchemy models and Alembic own durable metadata. PostgreSQL,
+The current milestone implements the offline code boundary for tutorial phase 4. The deterministic
+engine remains independent, while SQLAlchemy models and Alembic own durable metadata. PostgreSQL,
 password-protected Redis, and MinIO have pinned Compose services, health checks, and named volumes.
 
 Three lifecycle levels are deliberately independent:
@@ -48,5 +48,25 @@ before a `media_assets` row exists. Artifact publication copies all versioned ob
 writes the manifest last, so consumers never discover a partial set. SQL authorization is checked
 before presigned download URLs are issued, and soft deletion plus `purge_after` governs cleanup.
 
-The current `AgentState` is a checkpoint contract, not an executable Agent. Model adapters, Agent
-graph execution, API routes, Workers, and the Web product remain later phases.
+The model gateway exposes six structural Protocols instead of supplier SDKs: Chat, Vision, ASR,
+OCR, Embedding, and Reranker. Every successful result carries provider, model revision, prompt and
+config versions, latency, tokens, characters, audio seconds, cost-or-unknown, a raw object
+reference, and a validated parsed result. The OpenAI SDK is confined to one adapter module; Fake
+and local-Qwen adapters implement the same contracts.
+
+`ResilientModelExecutor` owns bounded exponential backoff with jitter, at most one Schema repair,
+local rate limiting, a provider/model circuit breaker, and hard preflight reservations for call,
+token, cost, and wall-time budgets. Authentication, permission, content-policy, and deterministic
+semantic failures are not retried. Every attempt writes sanitized accounting to `model_calls`;
+prompts, image bytes, complete transcripts, raw response bodies, and keys are absent from SQL logs.
+
+The temporary `LocalQwen35Adapter` proves that the gateway is not tied to OpenAI. It targets the
+user-owned multimodal Qwen3.5-0.8B checkpoint only when an isolated optional GPU runtime is
+installed. The word “temporary” is part of its provider and evaluation identifiers. It is not the
+final model selection, and its local execution cost records external API cost as zero while
+excluding electricity and hardware cost.
+
+The current `AgentState` is still a checkpoint contract, not an executable production Agent.
+`FakeStage4AcceptanceHarness` proves Job -> trace -> model call -> deterministic engine -> five
+artifacts only for integration acceptance. Agent graph execution, API routes, Workers, and the Web
+product remain later phases.

@@ -1,0 +1,90 @@
+{
+  "chat": {
+    "text": "The synthetic observation is ready for deterministic verification.",
+    "structured": {"decision": "continue", "requires_review": false}
+  },
+  "vision": {
+    "observation": {
+      "frame_id": "fake_frame_001",
+      "visible_student_count": 18,
+      "focused": 15,
+      "head_down_reading_or_writing": 5,
+      "hand_raised": 2,
+      "discussion": 0,
+      "distracted": 2,
+      "teacher": {
+        "teaching": true,
+        "blackboard_writing": false,
+        "patrolling": false,
+        "questioning": null,
+        "organizing_discussion": null,
+        "guiding_students": false,
+        "using_slides": true
+      },
+      "evidence": [
+        "The synthetic fixture contains eighteen visible student markers.",
+        "Two visible markers use the raised-hand symbol."
+      ],
+      "limitations": [
+        "This is a fixed synthetic fixture, not a real classroom image.",
+        "The back region is intentionally not visible."
+      ],
+      "confidence": 0.88
+    },
+    "regions": [
+      {"region_id": "front", "visibility": "visible", "focus": 86.0, "interaction": 24.0},
+      {"region_id": "middle", "visibility": "partial", "focus": 78.0, "interaction": 18.0},
+      {"region_id": "back", "visibility": "not_visible", "focus": null, "interaction": null}
+    ]
+  },
+  "asr": {
+    "language": "zh",
+    "segments": [
+      {"start_seconds": 0.0, "end_seconds": 1.5, "text": "这是合成转写片段。"},
+      {"start_seconds": 1.5, "end_seconds": 3.0, "text": "它不包含真实课堂数据。"}
+    ]
+  },
+  "ocr": {
+    "items": [
+      {
+        "image_ref": "fixture://image/001",
+        "text": "Synthetic lesson",
+        "confidence": 0.99,
+        "box": {"x": 0.1, "y": 0.1, "width": 0.4, "height": 0.1}
+      }
+    ]
+  },
+  "embedding": {
+    "vectors": [[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]]
+  },
+  "reranker": {
+    "items": [
+      {"original_index": 1, "score": 0.91},
+      {"original_index": 0, "score": 0.72}
+    ]
+  },
+  "semantic_invalid_vision": {
+    "observation": {
+      "frame_id": "invalid_frame",
+      "visible_student_count": 2,
+      "focused": 3,
+      "head_down_reading_or_writing": 0,
+      "hand_raised": 0,
+      "discussion": 0,
+      "distracted": 0,
+      "teacher": {
+        "teaching": true,
+        "blackboard_writing": false,
+        "patrolling": false,
+        "questioning": null,
+        "organizing_discussion": null,
+        "guiding_students": false,
+        "using_slides": false
+      },
+      "evidence": ["Schema-shaped but semantically impossible counts."],
+      "limitations": ["Synthetic invalid fixture."],
+      "confidence": 0.5
+    },
+    "regions": []
+  }
+}

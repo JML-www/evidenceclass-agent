@@ -52,3 +52,13 @@ layout, retention flow, Compose topology, and acceptance tests were written from
 phase-3 requirements and public library contracts. No database schema, cloud credentials, media,
 container volume, or storage implementation was copied from the legacy project or reference site.
 Only synthetic bytes and generated UUIDs enter the phase-3 test suite.
+
+## Phase 4 clean-room result
+
+As of 2026-08-10, model capability contracts, Fake fixtures, error taxonomy, retry and budget
+policies, SDK isolation, raw-response references, and evaluation tooling were authored from the
+tutorial requirements and public provider/library interfaces. The optional local Qwen checkpoint
+is user-owned, remains outside this repository, and is never copied, hashed in full, or committed.
+Ten evaluation images are generated from original geometric pixels
+at runtime and contain no classroom media or personal information. Qwen3.5-0.8B is declared only
+as a temporary functional substitute, not a final model or accuracy baseline.

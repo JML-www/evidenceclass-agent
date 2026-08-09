@@ -47,5 +47,6 @@ def test_compose_requires_env_secrets_and_example_contains_only_placeholders():
         "MINIO_ROOT_PASSWORD",
         "MINIO_ACCESS_KEY",
         "MINIO_SECRET_KEY",
+        "OPENAI_API_KEY",
     ):
-        assert values[variable].startswith("replace-with-a-local-")
+        assert values[variable].startswith("replace-with-")

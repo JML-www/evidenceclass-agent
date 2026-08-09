@@ -14,3 +14,9 @@ public milestones that can be verified from commits, tests, and CI:
   reversible Alembic schema, three explicit lifecycle machines, 50-way idempotency tests,
   tenant-scoped object storage, manifest-last publication, retention cleanup, and live-infrastructure
   CI gate. Local Docker-dependent acceptance remains separately visible from offline tests.
+- 2026-08-10: implemented the phase-4 offline model gateway: six provider-neutral capability
+  Protocols, all-capability Fake and fault scenarios, a no-network five-artifact harness, one
+  OpenAI-compatible Chat/Vision adapter, an optional temporary local-Qwen adapter, durable model
+  attempt accounting, and bounded reliability policies. The available remote endpoint rejected
+  generation with HTTP 403, while the optional GPU runtime download was too slow to finish in this
+  session; both real-model attempts remain explicit pending evidence rather than claimed success.

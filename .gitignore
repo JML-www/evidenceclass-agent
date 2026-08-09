@@ -1,5 +1,6 @@
 # Python虚拟环境
 .venv/
+.qwen-runtime/
 venv/
 env/
 

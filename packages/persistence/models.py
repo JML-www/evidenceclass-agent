@@ -164,11 +164,20 @@ class ModelCall(IdTimestampMixin, Base):
     )
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
+    model_revision: Mapped[str | None] = mapped_column(String(128))
     prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    config_version: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    characters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    audio_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    cost: Mapped[float | None] = mapped_column(Float)
+    cost_known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+    raw_response_ref: Mapped[str | None] = mapped_column(String(1024))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="SUCCEEDED")
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
 
 class Observation(IdTimestampMixin, Base):
