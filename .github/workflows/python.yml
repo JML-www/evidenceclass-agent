@@ -20,3 +20,61 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: python -m ruff check .
       - run: python -m pytest -q
+
+  phase-3-infrastructure:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: evidenceclass_ci
+          POSTGRES_USER: evidenceclass_ci
+          POSTGRES_PASSWORD: evidenceclass_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U evidenceclass_ci -d evidenceclass_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7.4.0-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://evidenceclass_ci:evidenceclass_ci_password@127.0.0.1:5432/evidenceclass_ci
+      REDIS_URL: redis://127.0.0.1:6379/0
+      MINIO_ENDPOINT: 127.0.0.1:9000
+      MINIO_ACCESS_KEY: evidenceclass-ci
+      MINIO_SECRET_KEY: evidenceclass-ci-secret
+      MINIO_BUCKET: evidenceclass-ci
+      MINIO_SECURE: "false"
+      RUN_STAGE3_INFRA_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Start MinIO
+        run: |
+          docker run -d --name evidenceclass-minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER="$MINIO_ACCESS_KEY" \
+            -e MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \
+            minio/minio:RELEASE.2024-08-03T04-33-23Z server /data
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs evidenceclass-minio
+          exit 1
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest tests/integration/test_stage3_infrastructure.py -q

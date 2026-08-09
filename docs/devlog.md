@@ -10,3 +10,7 @@ public milestones that can be verified from commits, tests, and CI:
 - 2026-08-07: completed tutorial steps 2.3 through 2.5 locally: modular deterministic engine,
   reusable service and installable CLI, five consistent artifacts, and 1000-example property
   testing. The personal detailed log is stored on the Desktop rather than in this repository.
+- 2026-08-09: completed the phase-3 persistence boundary: pinned Compose infrastructure,
+  reversible Alembic schema, three explicit lifecycle machines, 50-way idempotency tests,
+  tenant-scoped object storage, manifest-last publication, retention cleanup, and live-infrastructure
+  CI gate. Local Docker-dependent acceptance remains separately visible from offline tests.
