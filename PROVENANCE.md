@@ -62,3 +62,17 @@ is user-owned, remains outside this repository, and is never copied, hashed in f
 Ten evaluation images are generated from original geometric pixels
 at runtime and contain no classroom media or personal information. Qwen3.5-0.8B is declared only
 as a temporary functional substitute, not a final model or accuracy baseline.
+
+## Phase 5 clean-room result
+
+As of 2026-08-11, the safe probe policy, deterministic extraction timeline, VAD/chunk merge,
+limited visual vocabulary, OCR threshold policy, segment manifest, and evaluation code were
+written from the tutorial requirements and public FFmpeg/faster-whisper/RapidOCR interfaces.
+No legacy media-processing implementation or private classroom byte was copied.
+
+All committed phase-5 trial metadata is synthetic. The thirty visual diagrams are rendered at
+runtime from the versioned truth manifest in `evals/media/`; generated PNG, video, WAV, model
+cache, raw responses, and evaluation reports stay under ignored runtime/output directories. The
+five-minute ASR fixture is synthesized locally with an installed operating-system voice; OCR
+fixtures are original slide, board, and no-text drawings. These fixtures support reproducibility
+and error analysis, not claims about real students, schools, or classroom-model accuracy.

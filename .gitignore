@@ -1,6 +1,7 @@
 # Python虚拟环境
 .venv/
 .qwen-runtime/
+.media-runtime/
 venv/
 env/
 
@@ -40,6 +41,8 @@ models/
 *.mkv
 *.wav
 *.srt
+*.webm
+*.avi
 
 # IDE项目配置
 .idea/

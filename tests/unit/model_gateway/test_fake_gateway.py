@@ -10,6 +10,7 @@ from packages.model_gateway import (
     FakeScenario,
     OcrModel,
     Reranker,
+    StructuredVisionModel,
     VisionModel,
 )
 from packages.model_gateway.contracts import (
@@ -47,6 +48,7 @@ def test_fake_implements_all_six_capability_protocols_with_complete_metadata():
     gateway = FakeModelGateway()
     assert isinstance(gateway, ChatModel)
     assert isinstance(gateway, VisionModel)
+    assert isinstance(gateway, StructuredVisionModel)
     assert isinstance(gateway, AsrModel)
     assert isinstance(gateway, OcrModel)
     assert isinstance(gateway, EmbeddingModel)

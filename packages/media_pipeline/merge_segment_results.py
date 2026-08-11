@@ -50,16 +50,36 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
             raise ValueError(
                 "Every segment result must use video mode and contain segment metadata."
             )
+    unique_by_index: dict[int, dict[str, Any]] = {}
+    fingerprints: dict[int, str] = {}
+    duplicate_count = 0
+    for item in results:
+        index = int(item["segment"]["index"])
+        fingerprint = json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if index in unique_by_index:
+            if fingerprints[index] != fingerprint:
+                raise ValueError("Conflicting duplicate segment index.")
+            duplicate_count += 1
+            continue
+        unique_by_index[index] = item
+        fingerprints[index] = fingerprint
     ordered = sorted(
-        results,
+        unique_by_index.values(),
         key=lambda item: (
             float(item["segment"]["startSeconds"]),
             int(item["segment"]["index"]),
         ),
     )
     indices = [int(item["segment"]["index"]) for item in ordered]
-    if len(indices) != len(set(indices)):
-        raise ValueError("Segment indexes must be unique.")
+    expected_count = max(
+        [
+            int(item["segment"].get("expectedTotalSegments", max(indices)))
+            for item in ordered
+        ]
+    )
+    if indices != list(range(1, expected_count + 1)):
+        missing = sorted(set(range(1, expected_count + 1)) - set(indices))
+        raise ValueError(f"Segment sequence is incomplete; missing indexes: {missing}.")
     previous_end = 0.0
     for item in ordered:
         start = float(item["segment"]["startSeconds"])
@@ -79,7 +99,11 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
         "asrSummary": {},
         "teacherBehaviorDurations": {},
         "teachingContent": {},
-        "mergeMetadata": {"segmentCount": len(ordered), "orderedIndexes": indices},
+        "mergeMetadata": {
+            "segmentCount": len(ordered),
+            "orderedIndexes": indices,
+            "duplicateInputsIgnored": duplicate_count,
+        },
     }
     for item in ordered:
         segment = item["segment"]

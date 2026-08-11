@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+import pytest
+
 from packages.media_pipeline.merge_segment_results import merge
 
 
@@ -49,3 +51,31 @@ def test_segment_merge_converts_global_time_and_uses_duration_weights():
     assert merged["asrSummary"]["teacherQuestionCount"] == 5
     assert merged["asrSummary"]["teacherTalkRatio"] == 0.5
     assert [second, first] == original
+
+
+def test_segment_merge_is_idempotent_for_identical_duplicates_and_rejects_gaps():
+    item = {
+        "analysisMode": "video",
+        "courseInfo": {"courseName": "Synthetic", "className": "Class", "studentCount": 1},
+        "segment": {
+            "index": 1,
+            "startSeconds": 0.0,
+            "durationSeconds": 10.0,
+            "expectedTotalSegments": 1,
+        },
+        "frames": [],
+    }
+
+    merged = merge([item, deepcopy(item)])
+
+    assert merged["mergeMetadata"]["duplicateInputsIgnored"] == 1
+
+    missing_middle = deepcopy(item)
+    missing_middle["segment"] = {
+        "index": 2,
+        "startSeconds": 10.0,
+        "durationSeconds": 10.0,
+        "expectedTotalSegments": 2,
+    }
+    with pytest.raises(ValueError, match="missing indexes"):
+        merge([missing_middle])

@@ -17,6 +17,9 @@ from .contracts import (
     InvocationContext,
     InvocationMetadata,
     ModelUsage,
+    StructuredVisionOutput,
+    StructuredVisionRequest,
+    StructuredVisionResult,
     VisionOutput,
     VisionRequest,
     VisionResult,
@@ -114,6 +117,30 @@ class LocalQwen35Adapter:
                 raw_response_ref=metadata.raw_response_ref,
             ) from exc
         return VisionResult(metadata=metadata, parsed=parsed)
+
+    def observe_structured(self, request: StructuredVisionRequest) -> StructuredVisionResult:
+        schema = json.dumps(request.response_schema, ensure_ascii=False, sort_keys=True)
+        content: list[dict[str, Any]] = [
+            {"type": "image", "url": image_ref} for image_ref in request.image_refs
+        ]
+        content.append(
+            {
+                "type": "text",
+                "text": (
+                    request.instruction
+                    + " Return one JSON object only. Do not infer identity, emotion, attention, "
+                    + "ability, diagnosis, discipline, or whole-lesson quality. Schema: "
+                    + schema
+                ),
+            }
+        )
+        raw, metadata = self._generate(
+            [{"role": "user", "content": content}], request.context
+        )
+        return StructuredVisionResult(
+            metadata=metadata,
+            parsed=StructuredVisionOutput(structured=raw),
+        )
 
     def _generate(
         self, messages: list[dict[str, Any]], context: InvocationContext

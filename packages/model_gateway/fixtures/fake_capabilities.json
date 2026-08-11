@@ -37,6 +37,18 @@
       {"region_id": "back", "visibility": "not_visible", "focus": null, "interaction": null}
     ]
   },
+  "limited_vision": {
+    "visible_person_count": 19,
+    "labels": [
+      {"label": "raise_hand", "count": 2, "regions": ["middle"], "confidence": 0.88, "evidence": ["Two visible raised hands."]},
+      {"label": "standing", "count": 1, "regions": ["front"], "confidence": 0.82, "evidence": ["One person is visibly standing."]},
+      {"label": "reading_or_writing_visible", "count": 5, "regions": ["front", "middle"], "confidence": 0.79, "evidence": ["Five visible postures show reading or writing."]},
+      {"label": "group_discussion_visible", "count": 0, "regions": [], "confidence": 0.72, "evidence": ["No visible discussion group in this sampled frame."]},
+      {"label": "teacher_at_podium", "count": 1, "regions": ["teacher_zone"], "confidence": 0.91, "evidence": ["One adult figure is at the synthetic podium marker."]},
+      {"label": "teacher_patrolling_visible", "count": 0, "regions": [], "confidence": 0.84, "evidence": ["No visible patrolling motion can be established from this frame."]}
+    ],
+    "limitations": ["A sampled frame cannot establish whole-lesson duration or psychological state."]
+  },
   "asr": {
     "language": "zh",
     "segments": [

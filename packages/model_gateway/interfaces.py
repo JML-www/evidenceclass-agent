@@ -13,6 +13,8 @@ from .contracts import (
     OcrResult,
     RerankRequest,
     RerankResult,
+    StructuredVisionRequest,
+    StructuredVisionResult,
     VisionRequest,
     VisionResult,
 )
@@ -26,6 +28,11 @@ class ChatModel(Protocol):
 @runtime_checkable
 class VisionModel(Protocol):
     def observe(self, request: VisionRequest) -> VisionResult: ...
+
+
+@runtime_checkable
+class StructuredVisionModel(Protocol):
+    def observe_structured(self, request: StructuredVisionRequest) -> StructuredVisionResult: ...
 
 
 @runtime_checkable

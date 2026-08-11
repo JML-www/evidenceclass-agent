@@ -159,6 +159,20 @@ class VisionOutput(GatewayModel):
         return regions
 
 
+class StructuredVisionRequest(GatewayModel):
+    """Vision request whose business-owned Schema is validated again by its consumer."""
+
+    image_refs: list[str] = Field(min_length=1, max_length=20)
+    instruction: str = Field(min_length=1)
+    response_schema: dict[str, Any]
+    schema_name: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+    context: InvocationContext
+
+
+class StructuredVisionOutput(GatewayModel):
+    structured: dict[str, Any]
+
+
 class AsrRequest(GatewayModel):
     audio_ref: str = Field(min_length=1)
     language: str = Field(min_length=1)
@@ -263,6 +277,7 @@ class RerankOutput(GatewayModel):
 
 ChatResult = CapabilityResult[ChatOutput]
 VisionResult = CapabilityResult[VisionOutput]
+StructuredVisionResult = CapabilityResult[StructuredVisionOutput]
 AsrResult = CapabilityResult[AsrOutput]
 OcrResult = CapabilityResult[OcrOutput]
 EmbeddingResult = CapabilityResult[EmbeddingOutput]

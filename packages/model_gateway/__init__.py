@@ -11,12 +11,24 @@ from .contracts import (
     OcrResult,
     RerankRequest,
     RerankResult,
+    StructuredVisionRequest,
+    StructuredVisionResult,
     VisionRequest,
     VisionResult,
 )
 from .fake import FakeModelGateway, FakeScenario
-from .interfaces import AsrModel, ChatModel, EmbeddingModel, OcrModel, Reranker, VisionModel
+from .faster_whisper import FasterWhisperAdapter
+from .interfaces import (
+    AsrModel,
+    ChatModel,
+    EmbeddingModel,
+    OcrModel,
+    Reranker,
+    StructuredVisionModel,
+    VisionModel,
+)
 from .local_qwen import LocalQwen35Adapter
+from .rapidocr import RapidOcrAdapter
 
 __all__ = [
     "AsrModel",
@@ -30,6 +42,7 @@ __all__ = [
     "EmbeddingResult",
     "FakeModelGateway",
     "FakeScenario",
+    "FasterWhisperAdapter",
     "LocalQwen35Adapter",
     "OcrModel",
     "OcrRequest",
@@ -37,6 +50,10 @@ __all__ = [
     "RerankRequest",
     "RerankResult",
     "Reranker",
+    "RapidOcrAdapter",
+    "StructuredVisionModel",
+    "StructuredVisionRequest",
+    "StructuredVisionResult",
     "VisionModel",
     "VisionRequest",
     "VisionResult",

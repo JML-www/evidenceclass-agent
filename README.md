@@ -5,7 +5,7 @@ media into traceable observations, deterministic metrics, review tasks, and repo
 
 The repository currently contains the migrated characterization suite, strict Pydantic
 contracts, the standalone deterministic Evidence Engine, the phase-3 persistence boundary, and
-the phase-4 provider-neutral model gateway.
+the phase-4 provider-neutral model gateway, plus the phase-5 real media pipeline.
 PostgreSQL stores business and trace metadata, Redis is reserved for later queue work, and MinIO
 stores bytes behind tenant-scoped services. Explicit Job, Agent Run, and Tool Call state machines
 and database-backed idempotency make duplicate and out-of-order requests testable. Fake model
@@ -18,9 +18,12 @@ contain an executable production Agent graph, an API, or a Web application.
   HTTP endpoints and the Web product remain future work.
 - Agent layer: versioned checkpoint state and lifecycle transitions are implemented; planning,
   tool selection, branching, and graph execution remain future work.
-- AI capability layer: phase 4 implements replaceable Chat, VLM, ASR, OCR, Embedding, and Reranker
-  Protocols; all-capability Fake adapters; one OpenAI-compatible Chat/Vision path; and an optional
-  temporary local Qwen3.5 path. Real ASR, OCR, Embedding, and Reranker providers remain later work.
+- AI capability layer: provider-neutral Protocols have Fake adapters and optional local
+  faster-whisper/RapidOCR paths. OpenAI-compatible and temporary Qwen paths implement vision;
+  real VLM trial execution still needs an authorized working endpoint or the optional Qwen runtime.
+- Media layer: safe FFprobe inspection, decode validation, deterministic uniform/scene sampling,
+  global timestamps, 16 kHz mono extraction, energy VAD, ASR merge, OCR provenance/thresholding,
+  six-label visual observations, and idempotent segment merge are implemented.
 - Deterministic layer: phase 2 is implemented. Pure validation, metrics, sourced scoring,
   evidence IDs, result construction, presentation-only renderers, a reusable service, and the
   CLI own validation, metrics, evidence, hashes, and artifact consistency.
@@ -62,6 +65,33 @@ $env:LOCAL_QWEN_MODEL_PATH = "C:\path\to\Qwen3.5-0.8B"
 The first command may take a long time because it installs GPU PyTorch. Failure or absence of this
 optional runtime does not block Fake CI, phase-5 media work, or later Agent orchestration.
 
+## Phase-5 real media pipeline
+
+Bootstrap ignored project-local FFmpeg/FFprobe binaries, then run the required offline gate:
+
+```powershell
+.\scripts\setup-media-tools.ps1
+.\scripts\accept-stage-5.ps1
+```
+
+The gate generates only original synthetic media. It covers a normal ten-second video, no-audio,
+corruption, text disguised as video, Unicode/space paths, oversize metadata, reproducible frame
+hashes, shared dual-camera time, VAD/ASR/OCR/VLM Fake wiring, thirty visual trials, and shuffled,
+duplicated, or missing long-video segments.
+
+Optional real local ASR/OCR acceptance requires the heavy `media-models` extra and an explicit
+faster-whisper model. No model is selected or downloaded by default:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,media-models]"
+.\scripts\accept-stage-5.ps1 -RunRealMediaModels -WhisperModel tiny
+```
+
+The real evaluator uses an authorized five-minute synthetic speech fixture and synthetic
+slide/board/no-text images. Its CER and OCR errors are functional evidence for those fixtures,
+not a classroom accuracy claim. See `docs/stage-5-acceptance.md` for current results and the
+remaining real-VLM blocker.
+
 ## Development setup
 
 ```powershell
@@ -87,8 +117,8 @@ On success, the command prints the analysis mode, elapsed time, five artifact pa
 and SHA-256 hashes. Invalid input exits nonzero. The output writer replaces only the five managed
 artifact names and preserves unrelated files in the destination directory.
 
-See `docs/stage-2-acceptance.md`, `docs/stage-3-acceptance.md`, and
-`docs/stage-4-acceptance.md` for the executable acceptance matrices and honest external blockers.
+See `docs/stage-2-acceptance.md` through `docs/stage-5-acceptance.md` for executable acceptance
+matrices and honest external blockers.
 
 Only synthetic or explicitly authorized fixtures may enter this repository. See
 `PROVENANCE.md` for the migration ledger and `SECURITY.md` for reporting instructions.

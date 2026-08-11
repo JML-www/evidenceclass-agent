@@ -28,6 +28,9 @@ from .contracts import (
     RerankOutput,
     RerankRequest,
     RerankResult,
+    StructuredVisionOutput,
+    StructuredVisionRequest,
+    StructuredVisionResult,
     VisionOutput,
     VisionRequest,
     VisionResult,
@@ -79,12 +82,23 @@ class FakeModelGateway:
             metadata=self._metadata("vision", request.context, parsed), parsed=parsed
         )
 
+    def observe_structured(self, request: StructuredVisionRequest) -> StructuredVisionResult:
+        self._scenario_or_raise("vision")
+        parsed = StructuredVisionOutput(structured=self._fixture["limited_vision"])
+        return StructuredVisionResult(
+            metadata=self._metadata("vision", request.context, parsed), parsed=parsed
+        )
+
     def transcribe(self, request: AsrRequest) -> AsrResult:
         parsed = self._parse("asr", AsrOutput)
         return AsrResult(metadata=self._metadata("asr", request.context, parsed), parsed=parsed)
 
     def recognize(self, request: OcrRequest) -> OcrResult:
         parsed = self._parse("ocr", OcrOutput)
+        if parsed.items:
+            parsed = OcrOutput(
+                items=[parsed.items[0].model_copy(update={"image_ref": request.image_refs[0]})]
+            )
         return OcrResult(metadata=self._metadata("ocr", request.context, parsed), parsed=parsed)
 
     def embed(self, request: EmbeddingRequest) -> EmbeddingResult:
@@ -106,6 +120,19 @@ class FakeModelGateway:
         )
 
     def _parse(self, capability: str, output_type):
+        scenario = self._scenario_or_raise(capability)
+        if capability == "vision" and scenario is FakeScenario.SEMANTIC_INVALID:
+            raw = self._fixture["semantic_invalid_vision"]
+        else:
+            raw = self._fixture[capability]
+        try:
+            return output_type.model_validate(raw)
+        except ValidationError as exc:
+            raise SemanticValidationError(
+                f"fake {capability} returned schema-shaped but invalid values"
+            ) from exc
+
+    def _scenario_or_raise(self, capability: str) -> FakeScenario:
         scenario = self._scenario(capability)
         self.calls.append((capability, scenario))
         if capability in self._unavailable:
@@ -121,17 +148,9 @@ class FakeModelGateway:
                 json.loads('{"incomplete":')
             except json.JSONDecodeError as exc:
                 raise SchemaParseError(f"fake {capability} returned invalid JSON") from exc
-        raw = self._fixture[capability]
-        if capability == "vision" and scenario is FakeScenario.SEMANTIC_INVALID:
-            raw = self._fixture["semantic_invalid_vision"]
-        elif scenario is FakeScenario.SEMANTIC_INVALID:
+        if capability != "vision" and scenario is FakeScenario.SEMANTIC_INVALID:
             raise SemanticValidationError(f"fake {capability} crossed a semantic boundary")
-        try:
-            return output_type.model_validate(raw)
-        except ValidationError as exc:
-            raise SemanticValidationError(
-                f"fake {capability} returned schema-shaped but invalid values"
-            ) from exc
+        return scenario
 
     def _scenario(self, capability: str) -> FakeScenario:
         return self._scenarios.get(capability, FakeScenario.SUCCESS)

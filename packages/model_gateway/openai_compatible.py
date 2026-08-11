@@ -27,6 +27,9 @@ from .contracts import (
     InvocationContext,
     InvocationMetadata,
     ModelUsage,
+    StructuredVisionOutput,
+    StructuredVisionRequest,
+    StructuredVisionResult,
     VisionOutput,
     VisionRequest,
     VisionResult,
@@ -192,6 +195,36 @@ class OpenAICompatibleAdapter:
                 raw_response_ref=metadata.raw_response_ref,
             ) from exc
         return VisionResult(metadata=metadata, parsed=parsed)
+
+    def observe_structured(self, request: StructuredVisionRequest) -> StructuredVisionResult:
+        content: list[dict[str, Any]] = [{"type": "text", "text": request.instruction}]
+        content.extend(
+            {
+                "type": "image_url",
+                "image_url": {"url": image_ref, "detail": "low"},
+            }
+            for image_ref in request.image_refs
+        )
+        raw, metadata = self._complete(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Report only directly observable labels requested by the Schema. "
+                        "Do not infer identity, emotion, attention, ability, diagnosis, "
+                        "discipline, or whole-lesson quality."
+                    ),
+                },
+                {"role": "user", "content": content},
+            ],
+            schema=request.response_schema,
+            schema_name=request.schema_name,
+            context=request.context,
+        )
+        return StructuredVisionResult(
+            metadata=metadata,
+            parsed=StructuredVisionOutput(structured=raw),
+        )
 
     def _complete(
         self,

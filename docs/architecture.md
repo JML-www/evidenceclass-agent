@@ -19,7 +19,7 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone implements the offline code boundary for tutorial phase 4. The deterministic
+The current milestone implements the real media boundary for tutorial phase 5. The deterministic
 engine remains independent, while SQLAlchemy models and Alembic own durable metadata. PostgreSQL,
 password-protected Redis, and MinIO have pinned Compose services, health checks, and named volumes.
 
@@ -53,6 +53,35 @@ OCR, Embedding, and Reranker. Every successful result carries provider, model re
 config versions, latency, tokens, characters, audio seconds, cost-or-unknown, a raw object
 reference, and a validated parsed result. The OpenAI SDK is confined to one adapter module; Fake
 and local-Qwen adapters implement the same contracts.
+
+The phase-5 media path is deliberately upstream of model cost:
+
+```text
+authorized local/object media
+  -> safe path + size checks
+  -> FFprobe JSON + codec/duration/dimension/metadata policy
+  -> complete decode validation
+  -> versioned frame/audio extraction on a global millisecond timeline
+  -> replaceable ASR, OCR, and structured VLM adapters
+  -> validated observations and idempotent segment merge
+```
+
+Uniform sampling uses integer center-of-bin timestamps. Every PNG has asset/camera IDs, local and
+global milliseconds, policy version, SHA-256, and an object reference. Optional scene-change
+sampling uses the same provenance contract. Dual-camera inputs share the configured global
+offset; a sampled occurrence is never converted into an unsupported whole-lesson duration.
+
+ASR receives only 16 kHz mono PCM chunks after versioned energy VAD and emits global timestamped
+segments. Without diarization every role remains `unknown`, so teacher/student speech ratios are
+unavailable by construction. OCR retains raw and filtered text, normalized boxes, confidence,
+frame/time provenance, provider revision, threshold, and its validation-set selection note.
+
+Visual inference owns only six directly observable labels. The model never supplies asset IDs or
+timestamps: those are copied from the sampled-frame record. Pydantic rejects duplicate labels,
+counts beyond visible people, teacher counts above one, invalid regions, and extra psychological
+or quality fields. Long-media manifests require contiguous offsets. Merge sorts inputs, ignores
+byte-equivalent duplicates, rejects conflicting duplicates or missing pieces, sums counts and
+durations, computes duration-weighted ratio metrics, and converts local evidence to global time.
 
 `ResilientModelExecutor` owns bounded exponential backoff with jitter, at most one Schema repair,
 local rate limiting, a provider/model circuit breaker, and hard preflight reservations for call,
