@@ -20,3 +20,7 @@ public milestones that can be verified from commits, tests, and CI:
   attempt accounting, and bounded reliability policies. The available remote endpoint rejected
   generation with HTTP 403, while the optional GPU runtime download was too slow to finish in this
   session; both real-model attempts remain explicit pending evidence rather than claimed success.
+- 2026-08-11: completed the phase-5 real-media pipeline: bounded FFprobe/FFmpeg validation,
+  reproducible globally timestamped sampling, ASR/OCR/limited-VLM evidence contracts, and
+  idempotent segment merging. The synthetic-media gate and local faster-whisper/RapidOCR evaluation
+  passed; real-VLM accuracy remains unclaimed until a working authorized adapter is available.
