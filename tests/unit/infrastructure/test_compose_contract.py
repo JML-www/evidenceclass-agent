@@ -18,6 +18,7 @@ def test_compose_has_pinned_healthy_services_and_named_volumes():
     assert all("healthcheck" in service for service in services.values())
     assert set(compose["volumes"]) == {"postgres_data", "redis_data", "minio_data"}
     assert services["postgres"]["volumes"] == ["postgres_data:/var/lib/postgresql/data"]
+    assert services["postgres"]["image"] == "pgvector/pgvector:0.8.6-pg16-bookworm"
     assert services["redis"]["volumes"] == ["redis_data:/data"]
     assert services["minio"]["volumes"] == ["minio_data:/data"]
 

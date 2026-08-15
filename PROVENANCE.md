@@ -76,3 +76,17 @@ cache, raw responses, and evaluation reports stay under ignored runtime/output d
 five-minute ASR fixture is synthesized locally with an installed operating-system voice; OCR
 fixtures are original slide, board, and no-text drawings. These fixtures support reproducibility
 and error analysis, not claims about real students, schools, or classroom-model accuracy.
+
+## Phase 6 clean-room result
+
+As of 2026-08-15, source governance, parser/chunker behavior, retrieval filters, prompt boundaries,
+citation validation, and evaluation tooling were written from the tutorial requirements and
+public pypdf, SQLAlchemy, PostgreSQL, and pgvector interfaces. No private teaching material,
+external article, hidden prompt, or reference-site content was copied into the knowledge base.
+
+The two Markdown handbooks and 40 questions are original synthetic evaluation text. The generated
+five-page PDF contains ten original security rules and is created only under ignored run or test
+directories. Injection strings are adversarial test inputs, not executable scripts; the harness
+does not visit their links. Perfect metrics on this small code-labelled synthetic set prove that
+the retrieval and evaluation gates work, not that a learned embedding model will generalize to
+real educational literature.

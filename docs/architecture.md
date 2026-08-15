@@ -19,8 +19,9 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone implements the real media boundary for tutorial phase 5. The deterministic
-engine remains independent, while SQLAlchemy models and Alembic own durable metadata. PostgreSQL,
+The current milestone implements the citable retrieval boundary through tutorial phase 6. The
+deterministic engine remains independent, while SQLAlchemy models and Alembic own durable
+metadata. PostgreSQL,
 password-protected Redis, and MinIO have pinned Compose services, health checks, and named volumes.
 
 Three lifecycle levels are deliberately independent:
@@ -82,6 +83,32 @@ counts beyond visible people, teacher counts above one, invalid regions, and ext
 or quality fields. Long-media manifests require contiguous offsets. Merge sorts inputs, ignores
 byte-equivalent duplicates, rejects conflicting duplicates or missing pieces, sums counts and
 durations, computes duration-weighted ratio metrics, and converts local evidence to global time.
+
+The phase-6 retrieval path separates governance, parsing, retrieval, prompting, and publication:
+
+```text
+source registration + SHA-256 + authorization status
+  -> Markdown/TXT/text-PDF parser with heading/page provenance
+  -> stable hierarchical chunks + 384-dimensional embedding
+  -> code-owned workspace/source/version filter
+  -> pgvector Top-20 cosine recall -> optional Top-5 rerank
+  -> content-hash de-duplication + token budget
+  -> untrusted JSON context boundary
+  -> chunk/page/version citation publication gate
+```
+
+Only `AUTHORIZED` sources with a known license or authorization basis and parsed chunks can become
+`PUBLISHED`; publishing a newer source version marks the prior one `SUPERSEDED`. The SQL query
+joins documents before distance ordering, so tenant filtering cannot be delegated to a model or
+applied after retrieval. PostgreSQL owns a pgvector HNSW cosine index; an in-memory cosine store,
+feature-hashing adapter, and lexical reranker provide deterministic offline evaluation without
+being described as learned-model quality.
+
+Retrieved strings remain untrusted data. The prompt builder serializes system-owned chunk IDs and
+content as JSON, tool authorization rejects document-originated requests, active workspace checks
+remain in code, links and scripts have no fetch/execute path, and protected-prompt leakage is a
+publication failure. Knowledge claims must cite an existing chunk whose document is currently
+published in the active workspace and whose document ID, version, and page all match.
 
 `ResilientModelExecutor` owns bounded exponential backoff with jitter, at most one Schema repair,
 local rate limiting, a provider/model circuit breaker, and hard preflight reservations for call,

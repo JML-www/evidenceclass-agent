@@ -2,7 +2,7 @@ name: evidenceclass-agent
 
 services:
   postgres:
-    image: postgres:16.4-alpine
+    image: pgvector/pgvector:0.8.6-pg16-bookworm
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}

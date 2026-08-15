@@ -41,11 +41,11 @@ jobs:
         run: python -m pytest -q
 
   phase-3-infrastructure:
-    name: Phase 3 - Infrastructure
+    name: Phase 3/6 - Infrastructure and pgvector
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16.4-alpine
+        image: pgvector/pgvector:0.8.6-pg16-bookworm
         env:
           POSTGRES_DB: evidenceclass_ci
           POSTGRES_USER: evidenceclass_ci
@@ -75,6 +75,7 @@ jobs:
       MINIO_BUCKET: evidenceclass-ci
       MINIO_SECURE: "false"
       RUN_STAGE3_INFRA_TESTS: "1"
+      RUN_STAGE6_PGVECTOR_TESTS: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -104,5 +105,8 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e ".[dev]"
 
-      - name: Run infrastructure integration test
-        run: python -m pytest tests/integration/test_stage3_infrastructure.py -q
+      - name: Run infrastructure and pgvector integration tests
+        run: >-
+          python -m pytest
+          tests/integration/test_stage3_infrastructure.py
+          tests/integration/test_stage6_pgvector.py -q

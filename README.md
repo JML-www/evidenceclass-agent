@@ -5,7 +5,8 @@ media into traceable observations, deterministic metrics, review tasks, and repo
 
 The repository currently contains the migrated characterization suite, strict Pydantic
 contracts, the standalone deterministic Evidence Engine, the phase-3 persistence boundary, and
-the phase-4 provider-neutral model gateway, plus the phase-5 real media pipeline.
+the phase-4 provider-neutral model gateway, the phase-5 real media pipeline, and the phase-6
+citable RAG boundary.
 PostgreSQL stores business and trace metadata, Redis is reserved for later queue work, and MinIO
 stores bytes behind tenant-scoped services. Explicit Job, Agent Run, and Tool Call state machines
 and database-backed idempotency make duplicate and out-of-order requests testable. Fake model
@@ -24,6 +25,10 @@ contain an executable production Agent graph, an API, or a Web application.
 - Media layer: safe FFprobe inspection, decode validation, deterministic uniform/scene sampling,
   global timestamps, 16 kHz mono extraction, energy VAD, ASR merge, OCR provenance/thresholding,
   six-label visual observations, and idempotent segment merge are implemented.
+- Retrieval layer: register-first source governance, Markdown/TXT/text-PDF parsing, hierarchical
+  stable chunks, code-owned workspace/source/version filters, pgvector Top-20 retrieval, optional
+  Top-5 reranking, context budgets, injection boundaries, and citation publication gates are
+  implemented. The offline baseline is deterministic and is not a learned embedding quality claim.
 - Deterministic layer: phase 2 is implemented. Pure validation, metrics, sourced scoring,
   evidence IDs, result construction, presentation-only renderers, a reusable service, and the
   CLI own validation, metrics, evidence, hashes, and artifact consistency.
@@ -92,6 +97,32 @@ slide/board/no-text images. Its CER and OCR errors are functional evidence for t
 not a classroom accuracy claim. See `docs/stage-5-acceptance.md` for current results and the
 remaining real-VLM blocker.
 
+## Phase-6 citable RAG
+
+Run the complete offline gate without a model download or Docker:
+
+```powershell
+.\scripts\accept-stage-6.ps1
+```
+
+The gate parses original Markdown and generated text-PDF sources, audits a seeded random sample
+of 30 chunks, evaluates 40 retrieval questions with Recall@5/MRR/nDCG@5, checks tenant/source/
+version filtering, executes 10 prompt-injection trials, and proves that unknown sources plus
+forged or deleted citations cannot pass publication. The local feature-hashing embedding and
+lexical reranker make CI deterministic; production SQL uses a 384-dimensional pgvector column and
+an HNSW cosine index.
+
+Live pgvector acceptance is opt-in and requires the Compose services plus `DATABASE_URL`:
+
+```powershell
+.\scripts\accept-stage-3.ps1
+.\scripts\accept-stage-6.ps1 -RunPgVector
+```
+
+The GitHub infrastructure job uses a pinned pgvector PostgreSQL image and runs the live migration,
+extension, SQL ingestion, metadata-filtered cosine query, and downgrade/upgrade test. See
+`docs/stage-6-acceptance.md` for evidence boundaries and the synthetic-set limitation.
+
 ## Development setup
 
 ```powershell
@@ -117,7 +148,7 @@ On success, the command prints the analysis mode, elapsed time, five artifact pa
 and SHA-256 hashes. Invalid input exits nonzero. The output writer replaces only the five managed
 artifact names and preserves unrelated files in the destination directory.
 
-See `docs/stage-2-acceptance.md` through `docs/stage-5-acceptance.md` for executable acceptance
+See `docs/stage-2-acceptance.md` through `docs/stage-6-acceptance.md` for executable acceptance
 matrices and honest external blockers.
 
 Only synthetic or explicitly authorized fixtures may enter this repository. See

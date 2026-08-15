@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -244,30 +246,59 @@ class Artifact(IdTimestampMixin, Base):
 class KnowledgeDocument(IdTimestampMixin, Base):
     __tablename__ = "knowledge_documents"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "source", "version", name="uq_knowledge_source_version"),
+        UniqueConstraint(
+            "workspace_id", "source_id", "version", name="uq_knowledge_source_version"
+        ),
+        Index(
+            "ix_knowledge_documents_scope",
+            "workspace_id",
+            "status",
+            "source_id",
+            "version",
+        ),
     )
 
     workspace_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
+    source_id: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(1024), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    author_or_organization: Mapped[str] = mapped_column(String(255), nullable=False)
+    published_on: Mapped[date | None] = mapped_column(Date)
     license: Mapped[str] = mapped_column(String(255), nullable=False)
+    authorization_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    visibility_scope: Mapped[str] = mapped_column(String(32), nullable=False)
     version: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    parser_version: Mapped[str | None] = mapped_column(String(64))
+    parse_error: Mapped[str | None] = mapped_column(Text)
 
 
 class KnowledgeChunk(IdTimestampMixin, Base):
     __tablename__ = "knowledge_chunks"
-    __table_args__ = (Index("ix_knowledge_chunks_document", "document_id"),)
+    __table_args__ = (
+        Index("ix_knowledge_chunks_document", "document_id"),
+        UniqueConstraint("chunk_id", name="uq_knowledge_chunk_id"),
+    )
 
     document_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("knowledge_documents.id", ondelete="CASCADE"),
         nullable=False,
     )
+    chunk_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    page: Mapped[int | None] = mapped_column(Integer)
+    heading: Mapped[str] = mapped_column(String(1024), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    embedding: Mapped[list[float] | None] = mapped_column(JSON)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(384).with_variant(JSON(), "sqlite")
+    )
 
 
 class Conversation(IdTimestampMixin, Base):
