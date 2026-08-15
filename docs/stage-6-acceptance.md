@@ -49,6 +49,10 @@ the PostgreSQL `vector` extension, builds an HNSW cosine index, and performs wor
 version/status predicates in SQL before distance ordering. Transactional SQL ingestion and
 register/publish gates use the same contracts as offline evaluation.
 
+The HNSW index is declared in both Alembic and SQLAlchemy metadata. Alembic autogenerate includes
+it for PostgreSQL and explicitly excludes that PostgreSQL-only index from SQLite drift checks, so
+`alembic check` treats the ORM metadata and the live database as one consistent schema.
+
 The versioned evaluation set has 40 questions over 30 original synthetic chunks. Direct and
 Chinese paraphrase cases report Recall@5, MRR, nDCG@5, and failed case IDs rather than judging only
 an answer. Current offline results are 1.0 for all three metrics. Those values are a regression
@@ -95,5 +99,8 @@ Optional live PostgreSQL/pgvector gate:
 Generated PDF bytes and the JSON report remain in ignored `runs/stage6-retrieval-eval/`. The local
 machine used for the 2026-08-15 acceptance has no Docker CLI, so the optional local live-pgvector
 test is recorded as not requested rather than passed. The GitHub infrastructure job is configured
-with `pgvector/pgvector:0.8.6-pg16-bookworm` and will run the live extension, migration, SQL
-ingestion, filtered cosine query, and reversible migration test after the changes are pushed.
+with `pgvector/pgvector:0.8.6-pg16-bookworm`. Initial workflow run 9 exposed that the HNSW index
+existed only in the migration and therefore failed Alembic's live schema-drift check. The ORM
+metadata and dialect-aware autogenerate filter now own the same index definition. Phase-3
+infrastructure and phase-6 pgvector execute as separate CI steps on the next push so each failure
+boundary is visible.

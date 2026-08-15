@@ -29,3 +29,7 @@ public milestones that can be verified from commits, tests, and CI:
   Top-K retrieval, deterministic reranking and context budgets, prompt-injection boundaries, and
   citation publication validation. The 30-chunk audit, 40-question synthetic retrieval set, and
   10 injection trials pass offline; local live pgvector remains opt-in where Docker is unavailable.
+- 2026-08-15: GitHub workflow run 9 exposed an Alembic drift between the PostgreSQL-only HNSW
+  migration and ORM metadata. Declared the index in the model, excluded it only from SQLite
+  autogenerate checks, added dialect SQL assertions, and split infrastructure from pgvector CI
+  steps. The corrected local gate passes 142 tests; the live result remains pending the next push.

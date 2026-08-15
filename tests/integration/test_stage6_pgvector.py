@@ -39,6 +39,16 @@ def test_pgvector_extension_migration_and_cosine_operator(tmp_path):
         assert connection.scalar(
             text("SELECT '[1,0,0]'::vector <=> '[1,0,0]'::vector")
         ) == 0
+        index_definition = connection.scalar(
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE schemaname = current_schema() "
+                "AND indexname = 'ix_knowledge_chunks_embedding_hnsw'"
+            )
+        )
+        assert index_definition is not None
+        assert "USING hnsw" in index_definition
+        assert "vector_cosine_ops" in index_definition
     sessions = make_session_factory(engine)
     workspace_id = UUID("33333333-3333-4333-8333-333333333333")
     with sessions.begin() as session:

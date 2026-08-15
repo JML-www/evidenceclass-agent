@@ -105,8 +105,8 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e ".[dev]"
 
-      - name: Run infrastructure and pgvector integration tests
-        run: >-
-          python -m pytest
-          tests/integration/test_stage3_infrastructure.py
-          tests/integration/test_stage6_pgvector.py -q
+      - name: Run phase-3 infrastructure integration test
+        run: python -m pytest tests/integration/test_stage3_infrastructure.py -q
+
+      - name: Run phase-6 pgvector integration test
+        run: python -m pytest tests/integration/test_stage6_pgvector.py -q

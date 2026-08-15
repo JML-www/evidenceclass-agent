@@ -51,3 +51,23 @@ def test_compose_requires_env_secrets_and_example_contains_only_placeholders():
         "OPENAI_API_KEY",
     ):
         assert values[variable].startswith("replace-with-")
+
+
+def test_ci_runs_infrastructure_and_pgvector_as_separate_diagnostic_steps():
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "python.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["phase-3-infrastructure"]
+    steps = {step["name"]: step.get("run") for step in job["steps"]}
+
+    assert job["services"]["postgres"]["image"] == (
+        "pgvector/pgvector:0.8.6-pg16-bookworm"
+    )
+    assert job["env"]["RUN_STAGE3_INFRA_TESTS"] == "1"
+    assert job["env"]["RUN_STAGE6_PGVECTOR_TESTS"] == "1"
+    assert steps["Run phase-3 infrastructure integration test"] == (
+        "python -m pytest tests/integration/test_stage3_infrastructure.py -q"
+    )
+    assert steps["Run phase-6 pgvector integration test"] == (
+        "python -m pytest tests/integration/test_stage6_pgvector.py -q"
+    )

@@ -280,6 +280,12 @@ class KnowledgeChunk(IdTimestampMixin, Base):
     __tablename__ = "knowledge_chunks"
     __table_args__ = (
         Index("ix_knowledge_chunks_document", "document_id"),
+        Index(
+            "ix_knowledge_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ).ddl_if(dialect="postgresql"),
         UniqueConstraint("chunk_id", name="uq_knowledge_chunk_id"),
     )
 
