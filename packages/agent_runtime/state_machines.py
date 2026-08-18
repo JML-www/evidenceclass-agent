@@ -78,7 +78,9 @@ class ToolCallEvent(str, Enum):
 
 class ReviewDecision(str, Enum):
     APPROVED = "APPROVED"
+    MODIFIED = "MODIFIED"
     REJECTED = "REJECTED"
+    MATERIALS_REQUESTED = "MATERIALS_REQUESTED"
 
 
 JOB_TRANSITIONS: dict[tuple[JobState, JobEvent], JobState] = {
@@ -162,7 +164,7 @@ def transition(current, event, *, review_decision=None):
         if (
             current is JobState.NEEDS_REVIEW
             and event is JobEvent.REVIEW_APPROVED
-            and review_decision is not ReviewDecision.APPROVED
+            and review_decision not in {ReviewDecision.APPROVED, ReviewDecision.MODIFIED}
         ):
             raise InvalidTransition("NEEDS_REVIEW requires an APPROVED review decision")
         try:
@@ -177,7 +179,7 @@ def transition(current, event, *, review_decision=None):
         }:
             return AgentRunState.ERRORED
         if current is AgentRunState.WAITING_HUMAN and event is AgentRunEvent.RESUME:
-            if review_decision is ReviewDecision.APPROVED:
+            if review_decision in {ReviewDecision.APPROVED, ReviewDecision.MODIFIED}:
                 return AgentRunState.EXECUTING
             if review_decision is ReviewDecision.REJECTED:
                 return AgentRunState.ERRORED

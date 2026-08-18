@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "alembic>=1.13,<2.0",
+  "langgraph>=1.0,<2.0",
   "minio>=7.2,<8.0",
   "openai>=2.0,<3.0",
   "pgvector>=0.3,<1.0",

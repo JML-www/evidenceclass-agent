@@ -22,6 +22,9 @@ class AnalysisPlan(StrictStateModel):
     goal: str
     steps: list[str] = Field(default_factory=list)
     deadline_seconds: NonNegativeInt
+    tools: list[str] = Field(default_factory=list)
+    policy_notes: list[str] = Field(default_factory=list)
+    prompt_version: str = "planner.v0.1"
 
 
 class ValidationIssue(StrictStateModel):
@@ -52,3 +55,11 @@ class AgentState(StrictStateModel):
     retry_budget: RetryBudget
     requires_review: bool = False
     final_status: str | None = None
+    graph_version: str = "classroom-agent.v0.1"
+    current_node: str = "initialize"
+    completed_nodes: list[str] = Field(default_factory=list)
+    trace: list[str] = Field(default_factory=list)
+    checkpoint_id: str | None = None
+    model_calls: int = 0
+    tool_calls: int = 0
+    repair_rounds: int = 0

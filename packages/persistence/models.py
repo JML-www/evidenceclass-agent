@@ -125,6 +125,9 @@ class AgentRun(IdTimestampMixin, Base):
     graph_version: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="INITIALIZING")
     checkpoint_id: Mapped[str | None] = mapped_column(String(255))
+    checkpoint_state_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    prompt_version: Mapped[str | None] = mapped_column(String(64))
     budget_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     active_slot: Mapped[str | None] = mapped_column(String(16), default="active")
 
@@ -223,6 +226,14 @@ class ReviewItem(IdTimestampMixin, Base):
     risk: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
     decision: Mapped[str | None] = mapped_column(String(32))
+    reviewer_id: Mapped[str | None] = mapped_column(String(128))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    original_payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    revised_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class Artifact(IdTimestampMixin, Base):

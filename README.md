@@ -123,6 +123,27 @@ The GitHub infrastructure job uses a pinned pgvector PostgreSQL image and runs t
 extension, SQL ingestion, metadata-filtered cosine query, and downgrade/upgrade test. See
 `docs/stage-6-acceptance.md` for evidence boundaries and the synthetic-set limitation.
 
+## Phase-7 Agent Runtime
+
+Run the runtime, persistence, migration, dependency, and full-regression gate:
+
+```powershell
+.\scripts\accept-stage-7.ps1 -RunFull
+```
+
+The runtime uses typed `AgentState`, a policy-aware Tool Registry, a structured planner, and a real
+LangGraph `StateGraph` with conditional audio/image/transcript paths. Explicit budgets stop loops;
+checkpoint records preserve the last successful state; high-risk observations enter a durable
+human-review state; and publication requires evidence, citation, number, scope, and cross-artifact
+claim checks. The offline acceptance includes three distinct graph trajectories, worker-restart
+recovery without a repeated observation call, authorized single-decision review, and twenty
+deliberately polluted drafts.
+
+The default path remains deterministic and uses no paid model call. Stage 8 will expose this
+runtime through an asynchronous Worker and public API; those product boundaries are intentionally
+not claimed here. See `docs/stage-7-acceptance.md` for the exact evidence and remaining external
+skips.
+
 ## Development setup
 
 ```powershell
@@ -148,7 +169,7 @@ On success, the command prints the analysis mode, elapsed time, five artifact pa
 and SHA-256 hashes. Invalid input exits nonzero. The output writer replaces only the five managed
 artifact names and preserves unrelated files in the destination directory.
 
-See `docs/stage-2-acceptance.md` through `docs/stage-6-acceptance.md` for executable acceptance
+See `docs/stage-2-acceptance.md` through `docs/stage-7-acceptance.md` for executable acceptance
 matrices and honest external blockers.
 
 Only synthetic or explicitly authorized fixtures may enter this repository. See

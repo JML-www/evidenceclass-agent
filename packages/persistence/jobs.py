@@ -175,7 +175,12 @@ class JobLifecycleService:
                     select(ReviewItem.id).where(
                         ReviewItem.job_id == job_id,
                         ReviewItem.status == "DECIDED",
-                        ReviewItem.decision == ReviewDecision.APPROVED.value,
+                        ReviewItem.decision.in_(
+                            [
+                                ReviewDecision.APPROVED.value,
+                                ReviewDecision.MODIFIED.value,
+                            ]
+                        ),
                     )
                 )
                 review_decision = (

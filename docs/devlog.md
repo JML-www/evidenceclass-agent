@@ -33,3 +33,9 @@ public milestones that can be verified from commits, tests, and CI:
   migration and ORM metadata. Declared the index in the model, excluded it only from SQLite
   autogenerate checks, added dialect SQL assertions, and split infrastructure from pgvector CI
   steps. The corrected local gate passes 142 tests; the live result remains pending the next push.
+- 2026-08-18: completed the phase-7 Agent Runtime: a policy-aware Tool Registry, constrained
+  structured planner, real LangGraph conditional graph, bounded repair/model/tool budgets,
+  checkpoint/restart semantics, durable plan and prompt metadata, authorized single-decision
+  human review, and an evidence-first claim publication gate. Three graph trajectories, restart
+  reuse, SQLite migration cycles, and twenty polluted report drafts pass locally. The complete
+  deterministic suite passes 180 tests; four explicit external-runtime tests remain skipped.
