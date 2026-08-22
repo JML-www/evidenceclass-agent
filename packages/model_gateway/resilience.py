@@ -239,9 +239,7 @@ class ResilientModelExecutor(Generic[ResultT]):
     ) -> None:
         self._policy = policy or RetryPolicy()
         self._breaker = circuit_breaker or CircuitBreaker()
-        self._limiter = rate_limiter or SlidingWindowRateLimiter(
-            max_calls=60, window_seconds=60.0
-        )
+        self._limiter = rate_limiter or SlidingWindowRateLimiter(max_calls=60, window_seconds=60.0)
         self._sleep = sleep
         self._random = random_source or random.Random()
 

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def create_db_engine(url: str, *, echo: bool = False) -> Engine:
@@ -15,6 +16,8 @@ def create_db_engine(url: str, *, echo: bool = False) -> Engine:
     options: dict[str, object] = {"pool_pre_ping": True, "echo": echo}
     if url.startswith("sqlite"):
         options["connect_args"] = {"check_same_thread": False, "timeout": 30}
+        if ":memory:" in url:
+            options["poolclass"] = StaticPool
     engine = create_engine(url, **options)
     if url.startswith("sqlite"):
 

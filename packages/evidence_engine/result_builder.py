@@ -112,9 +112,7 @@ def build_result(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    summary_metrics = {
-        key: aggregate_metric(metric_frames, key) for key in SUMMARY_METRICS
-    }
+    summary_metrics = {key: aggregate_metric(metric_frames, key) for key in SUMMARY_METRICS}
     rubric_result = None
     if payload.get("rubric") is not None:
         rubric_result = evaluate_rubric(summary_metrics, payload["rubric"])
@@ -153,12 +151,8 @@ def build_result(payload: dict[str, Any]) -> dict[str, Any]:
         "regions": regions,
         "regionComparisons": _region_comparisons(regions),
         "distributions": {
-            "teacherBehavior": percentage_distribution(
-                payload.get("teacherBehaviorDurations", {})
-            ),
-            "teacherPosition": percentage_distribution(
-                payload.get("teacherPositionDurations", {})
-            ),
+            "teacherBehavior": percentage_distribution(payload.get("teacherBehaviorDurations", {})),
+            "teacherPosition": percentage_distribution(payload.get("teacherPositionDurations", {})),
         },
         "evidence": [item.model_dump(mode="json") for item in evidence],
         "actions": build_actions(summary_metrics, evidence_ids),

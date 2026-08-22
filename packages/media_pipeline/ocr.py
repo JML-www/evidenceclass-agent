@@ -98,9 +98,7 @@ class OcrPipeline:
             max_output_tokens=4096,
         )
         by_ref = {frame.object_ref: frame for frame in frames}
-        result = self._model.recognize(
-            OcrRequest(image_refs=list(by_ref), context=invocation)
-        )
+        result = self._model.recognize(OcrRequest(image_refs=list(by_ref), context=invocation))
         items: list[OcrEvidenceItem] = []
         for index, item in enumerate(result.parsed.items, start=1):
             frame = by_ref.get(item.image_ref)

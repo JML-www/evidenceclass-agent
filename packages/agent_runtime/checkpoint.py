@@ -34,9 +34,7 @@ class CheckpointStore:
 
     def save_succeeded(self, state: AgentState, node: str, output: Any = None) -> Checkpoint:
         output_hash = self._hash(output) if output is not None else None
-        return self._save(
-            state, node, "SUCCEEDED", output_hash
-        )
+        return self._save(state, node, "SUCCEEDED", output_hash)
 
     def _save(
         self, state: AgentState, node: str, status: str, output_hash: str | None

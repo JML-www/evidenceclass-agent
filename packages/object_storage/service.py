@@ -96,9 +96,7 @@ def _looks_like(data: bytes, mime: str) -> bool:
 class ObjectStorageService:
     """Keep object bytes out of SQL while enforcing SQL-owned authorization."""
 
-    def __init__(
-        self, store: ObjectStore, session_factory: sessionmaker[Session]
-    ) -> None:
+    def __init__(self, store: ObjectStore, session_factory: sessionmaker[Session]) -> None:
         self._store = store
         self._sessions = session_factory
         self._store.ensure_bucket()
@@ -137,7 +135,10 @@ class ObjectStorageService:
         role: str = "source",
     ) -> MediaAsset:
         self._require_job(ticket.workspace_id, ticket.job_id)
-        if datetime.now(timezone.utc) > ticket.expires_at:
+        expires_at = ticket.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
             raise StorageValidationError("upload ticket has expired")
         stat = self._store.stat(ticket.object_key)
         data = self._store.read(ticket.object_key)
@@ -155,9 +156,7 @@ class ObjectStorageService:
             raise StorageValidationError("uploaded SHA-256 does not match")
 
         asset_id = uuid4()
-        final_key = (
-            f"workspaces/{ticket.workspace_id}/jobs/{ticket.job_id}/media/{asset_id}"
-        )
+        final_key = f"workspaces/{ticket.workspace_id}/jobs/{ticket.job_id}/media/{asset_id}"
         self._store.copy(ticket.object_key, final_key)
         try:
             with self._sessions() as session, session.begin():
@@ -215,20 +214,16 @@ class ObjectStorageService:
         final_keys: list[str] = []
         published: list[PublishedArtifact] = []
         manifest_key = (
-            f"workspaces/{workspace_id}/jobs/{job_id}/artifacts/"
-            f"{version}/{token}.manifest.json"
+            f"workspaces/{workspace_id}/jobs/{job_id}/artifacts/{version}/{token}.manifest.json"
         )
         try:
             for kind, (mime, data) in sorted(contents.items()):
                 if mime not in ALLOWED_MIME_TYPES or not _looks_like(data, mime):
                     raise StorageValidationError(f"artifact {kind} failed MIME validation")
                 artifact_id = uuid4()
-                temporary_key = (
-                    f"temporary/{workspace_id}/{job_id}/artifacts/{token}/{artifact_id}"
-                )
+                temporary_key = f"temporary/{workspace_id}/{job_id}/artifacts/{token}/{artifact_id}"
                 final_key = (
-                    f"workspaces/{workspace_id}/jobs/{job_id}/artifacts/"
-                    f"{version}/{artifact_id}"
+                    f"workspaces/{workspace_id}/jobs/{job_id}/artifacts/{version}/{artifact_id}"
                 )
                 self._store.put(temporary_key, data, mime)
                 temporary_keys.append(temporary_key)
@@ -252,8 +247,7 @@ class ObjectStorageService:
                 "job_id": str(job_id),
                 "version": version,
                 "artifacts": [
-                    {**asdict(item), "artifact_id": str(item.artifact_id)}
-                    for item in published
+                    {**asdict(item), "artifact_id": str(item.artifact_id)} for item in published
                 ],
             }
             manifest_bytes = json.dumps(
@@ -334,13 +328,9 @@ class ObjectStorageService:
                     self._store.remove(key)
             with self._sessions() as session, session.begin():
                 job = self._find_job(session, workspace_id, job_id)
-                for asset in session.scalars(
-                    select(MediaAsset).where(MediaAsset.job_id == job_id)
-                ):
+                for asset in session.scalars(select(MediaAsset).where(MediaAsset.job_id == job_id)):
                     session.delete(asset)
-                for artifact in session.scalars(
-                    select(Artifact).where(Artifact.job_id == job_id)
-                ):
+                for artifact in session.scalars(select(Artifact).where(Artifact.job_id == job_id)):
                     session.delete(artifact)
                 job.objects_purged_at = current_time
             purged.append(job_id)

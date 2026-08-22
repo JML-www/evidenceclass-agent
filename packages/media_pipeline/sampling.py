@@ -76,8 +76,8 @@ class LocalFrameSink:
     ) -> str:
         safe_asset = _safe_component(asset_id)
         safe_camera = _safe_component(camera_id)
-        destination = self.root / safe_asset / safe_camera / (
-            f"{global_timestamp_ms:012d}_{sha256[:16]}.png"
+        destination = (
+            self.root / safe_asset / safe_camera / (f"{global_timestamp_ms:012d}_{sha256[:16]}.png")
         )
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists() and destination.read_bytes() != data:

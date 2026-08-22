@@ -98,9 +98,7 @@ class Stage5MediaPipeline:
         if self._ocr is None:
             unavailable.append("ocr:model_not_configured")
         observations = (
-            [self._vision.observe(frame) for frame in frames]
-            if self._vision is not None
-            else []
+            [self._vision.observe(frame) for frame in frames] if self._vision is not None else []
         )
         if self._vision is None:
             unavailable.append("vision:model_not_configured")

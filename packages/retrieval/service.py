@@ -133,9 +133,7 @@ class RetrievalService:
             ranked.append(candidate.model_copy(update={"rerank_score": item.score}))
         return ranked
 
-    def _budget(
-        self, ranked: list[ScoredChunk]
-    ) -> tuple[list[RetrievedContext], int, int]:
+    def _budget(self, ranked: list[ScoredChunk]) -> tuple[list[RetrievedContext], int, int]:
         remaining = self._context_token_budget
         contexts: list[RetrievedContext] = []
         seen_hashes: set[str] = set()

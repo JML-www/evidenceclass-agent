@@ -51,18 +51,22 @@ def test_local_qwen_is_optional_temporary_adapter_with_same_vision_contract(tmp_
     model_path = tmp_path / "Qwen3.5-0.8B"
     model_path.mkdir()
     (model_path / "config.json").write_text('{"model_type":"qwen3_5"}', encoding="utf-8")
-    expected = FakeModelGateway().observe(
-        VisionRequest(
-            image_refs=["fixture://image"],
-            instruction="synthetic",
-            context=InvocationContext(
-                prompt_version="p.v1",
-                config_version="c.v1",
-                timeout_seconds=2.0,
-                max_output_tokens=64,
-            ),
+    expected = (
+        FakeModelGateway()
+        .observe(
+            VisionRequest(
+                image_refs=["fixture://image"],
+                instruction="synthetic",
+                context=InvocationContext(
+                    prompt_version="p.v1",
+                    config_version="c.v1",
+                    timeout_seconds=2.0,
+                    max_output_tokens=64,
+                ),
+            )
         )
-    ).parsed
+        .parsed
+    )
     processor = StubProcessor(expected.model_dump_json())
     sink = InMemoryRawResponseSink()
     adapter = LocalQwen35Adapter(
@@ -91,4 +95,48 @@ def test_local_qwen_is_optional_temporary_adapter_with_same_vision_contract(tmp_
     assert result.metadata.usage.cost_usd == 0.0
     assert result.parsed.observation.visible_student_count == 18
     assert processor.messages[0]["content"][0]["type"] == "image"
+    assert "Omit the optional regions property" in processor.messages[0]["content"][-1]["text"]
     assert result.metadata.raw_response_ref in sink.objects
+
+
+def test_local_qwen_accepts_json_markdown_fence(tmp_path):
+    model_path = tmp_path / "Qwen3.5-0.8B"
+    model_path.mkdir()
+    (model_path / "config.json").write_text('{"model_type":"qwen3_5"}', encoding="utf-8")
+    expected = (
+        FakeModelGateway()
+        .observe(
+            VisionRequest(
+                image_refs=["fixture://image"],
+                instruction="synthetic",
+                context=InvocationContext(
+                    prompt_version="p.v1",
+                    config_version="c.v1",
+                    timeout_seconds=2.0,
+                    max_output_tokens=64,
+                ),
+            )
+        )
+        .parsed
+    )
+    processor = StubProcessor(f"```json\n{expected.model_dump_json()}\n```")
+    adapter = LocalQwen35Adapter(
+        model_path=model_path,
+        raw_response_sink=InMemoryRawResponseSink(),
+        model=StubModel(),
+        processor=processor,
+        torch_module=StubTorch(),
+    )
+    result = adapter.observe(
+        VisionRequest(
+            image_refs=["data:image/png;base64,AAAA"],
+            instruction="observe only synthetic markers",
+            context=InvocationContext(
+                prompt_version="local-qwen-temporary.v1",
+                config_version="local-qwen-test.v1",
+                timeout_seconds=2.0,
+                max_output_tokens=64,
+            ),
+        )
+    )
+    assert result.parsed.observation.visible_student_count == 18

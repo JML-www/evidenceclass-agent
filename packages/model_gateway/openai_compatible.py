@@ -138,9 +138,7 @@ class OpenAICompatibleAdapter:
         output_rate = os.getenv("OPENAI_OUTPUT_COST_PER_MILLION", "")
         if bool(input_rate) != bool(output_rate):
             raise ValueError("both OpenAI token pricing rates must be configured together")
-        pricing = (
-            TokenPricing(float(input_rate), float(output_rate)) if input_rate else None
-        )
+        pricing = TokenPricing(float(input_rate), float(output_rate)) if input_rate else None
         return cls(
             api_key=api_key,
             base_url=base_url,

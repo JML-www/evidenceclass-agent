@@ -47,9 +47,7 @@ class SqlCheckpointStore:
                 created_at=step.created_at or datetime.now(timezone.utc),
             )
 
-    def save_succeeded(
-        self, state: AgentState, node: str, output: Any = None
-    ) -> Checkpoint:
+    def save_succeeded(self, state: AgentState, node: str, output: Any = None) -> Checkpoint:
         output_hash = (
             sha256(repr(output).encode("utf-8")).hexdigest() if output is not None else None
         )
@@ -173,9 +171,7 @@ class SqlReviewService:
                     note=note,
                     revision=ReviewItem.revision + 1,
                     revised_payload_json=(
-                        dict(revised_observation)
-                        if revised_observation is not None
-                        else None
+                        dict(revised_observation) if revised_observation is not None else None
                     ),
                 )
             )

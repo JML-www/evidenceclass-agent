@@ -88,9 +88,7 @@ class AnalysisRequest(BaseContract):
 
     @field_validator("lesson_duration_sec")
     @classmethod
-    def validate_image_duration(
-        cls, value: float | None, info: ValidationInfo
-    ) -> float | None:
+    def validate_image_duration(cls, value: float | None, info: ValidationInfo) -> float | None:
         if info.data.get("is_image_mode") is True and value is not None:
             raise ValueError("lesson_duration_sec is unavailable in image mode")
         return value

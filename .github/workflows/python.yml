@@ -76,6 +76,7 @@ jobs:
       MINIO_SECURE: "false"
       RUN_STAGE3_INFRA_TESTS: "1"
       RUN_STAGE6_PGVECTOR_TESTS: "1"
+      RUN_STAGE8_CELERY_TESTS: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -110,3 +111,6 @@ jobs:
 
       - name: Run phase-6 pgvector integration test
         run: python -m pytest tests/integration/test_stage6_pgvector.py -q
+
+      - name: Run phase-8 Celery integration test
+        run: python -m pytest tests/integration/test_stage8_celery.py -q

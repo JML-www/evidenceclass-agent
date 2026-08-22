@@ -72,9 +72,7 @@ class RapidOcrAdapter:
                 if item.text:
                     items.append(item)
                     raw_audit.append(item.model_dump(mode="json"))
-        raw_ref = self._raw_sink.put(
-            json.dumps(raw_audit, ensure_ascii=False).encode("utf-8")
-        )
+        raw_ref = self._raw_sink.put(json.dumps(raw_audit, ensure_ascii=False).encode("utf-8"))
         parsed = OcrOutput(items=items)
         return OcrResult(
             metadata=InvocationMetadata(

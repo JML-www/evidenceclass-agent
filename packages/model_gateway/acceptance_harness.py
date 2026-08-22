@@ -78,9 +78,7 @@ class FakeStage4AcceptanceHarness:
             self._jobs.apply_run_event(run_id=run_id, event=event)
 
         step_id, tool_call_id = self._begin_trace(run_id)
-        recorder = SqlAlchemyModelCallRecorder(
-            self._sessions, tool_call_id=tool_call_id
-        )
+        recorder = SqlAlchemyModelCallRecorder(self._sessions, tool_call_id=tool_call_id)
         context = InvocationContext(
             prompt_version="fake-vision-prompt.v0.1",
             config_version="fake-vision-config.v0.1",
@@ -100,9 +98,7 @@ class FakeStage4AcceptanceHarness:
                 max_wall_seconds=30.0,
             )
         )
-        executor = ResilientModelExecutor(
-            policy=RetryPolicy(max_retries=0, max_schema_repairs=0)
-        )
+        executor = ResilientModelExecutor(policy=RetryPolicy(max_retries=0, max_schema_repairs=0))
 
         try:
             vision_result = executor.execute(
@@ -131,9 +127,7 @@ class FakeStage4AcceptanceHarness:
         self._finish_trace(step_id, tool_call_id, succeeded=True)
         self._jobs.apply_run_event(run_id=run_id, event=AgentRunEvent.VERIFY)
         self._jobs.apply_run_event(run_id=run_id, event=AgentRunEvent.COMPLETE)
-        self._jobs.apply_job_event(
-            workspace_id=workspace_id, job_id=job_id, event=JobEvent.SUCCEED
-        )
+        self._jobs.apply_job_event(workspace_id=workspace_id, job_id=job_id, event=JobEvent.SUCCEED)
         return FakeE2EResult(
             job_id=job_id,
             run_id=run_id,

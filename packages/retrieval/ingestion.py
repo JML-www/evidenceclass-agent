@@ -41,9 +41,7 @@ class KnowledgeIngestionService:
         self._chunker = chunker or HierarchicalChunker()
         self._embedding_batch_size = embedding_batch_size
 
-    def ingest(
-        self, registration: SourceRegistration, path: str | Path
-    ) -> list[KnowledgeChunk]:
+    def ingest(self, registration: SourceRegistration, path: str | Path) -> list[KnowledgeChunk]:
         """Register the source before parsing so every failure has source provenance."""
 
         self._repository.register(registration)

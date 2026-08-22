@@ -49,9 +49,7 @@ class DeterministicHashEmbeddingAdapter:
                 prompt_version=request.context.prompt_version,
                 config_version=request.context.config_version,
                 latency_ms=(time.perf_counter() - started) * 1000,
-                usage=ModelUsage(
-                    characters=sum(len(text) for text in request.texts), cost_usd=0.0
-                ),
+                usage=ModelUsage(characters=sum(len(text) for text in request.texts), cost_usd=0.0),
                 raw_response_ref=f"memory://hash-embedding/{digest}",
             ),
             parsed=EmbeddingOutput(vectors=vectors),
@@ -101,9 +99,6 @@ class LexicalOverlapReranker:
                 raw_response_ref=f"memory://lexical-reranker/{digest}",
             ),
             parsed=RerankOutput(
-                items=[
-                    RerankedItem(original_index=index, score=score)
-                    for index, score in selected
-                ]
+                items=[RerankedItem(original_index=index, score=score) for index, score in selected]
             ),
         )

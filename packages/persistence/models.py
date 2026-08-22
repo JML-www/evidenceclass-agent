@@ -89,6 +89,9 @@ class AnalysisJob(IdTimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="CREATED")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     purge_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     objects_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -112,6 +115,23 @@ class MediaAsset(IdTimestampMixin, Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float)
 
 
+class UploadSession(IdTimestampMixin, Base):
+    """Durable server-side record for a presigned upload ticket."""
+
+    __tablename__ = "upload_sessions"
+    __table_args__ = (Index("ix_upload_sessions_job_status", "job_id", "status"),)
+
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    object_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    expected_mime: Mapped[str] = mapped_column(String(255), nullable=False)
+    max_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    role: Mapped[str] = mapped_column(String(48), nullable=False, default="source")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ISSUED")
+
+
 class AgentRun(IdTimestampMixin, Base):
     __tablename__ = "agent_runs"
     __table_args__ = (
@@ -128,6 +148,7 @@ class AgentRun(IdTimestampMixin, Base):
     checkpoint_state_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     prompt_version: Mapped[str | None] = mapped_column(String(64))
+    worker_task_id: Mapped[str | None] = mapped_column(String(255))
     budget_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     active_slot: Mapped[str | None] = mapped_column(String(16), default="active")
 
@@ -202,9 +223,7 @@ class Observation(IdTimestampMixin, Base):
 
 class EvidenceItem(IdTimestampMixin, Base):
     __tablename__ = "evidence_items"
-    __table_args__ = (
-        UniqueConstraint("job_id", "evidence_id", name="uq_evidence_job_id"),
-    )
+    __table_args__ = (UniqueConstraint("job_id", "evidence_id", name="uq_evidence_job_id"),)
 
     job_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
@@ -349,6 +368,48 @@ class EvaluationRun(IdTimestampMixin, Base):
     system_version: Mapped[str] = mapped_column(String(64), nullable=False)
     metrics_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     artifact_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
+
+
+class JobEventRecord(Base):
+    """Append-only progress/event log used by SSE and audit consumers."""
+
+    __tablename__ = "job_events"
+    __table_args__ = (Index("ix_job_events_job_id", "job_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("agent_runs.id", ondelete="CASCADE")
+    )
+    type: Mapped[str] = mapped_column(String(128), nullable=False)
+    stage: Mapped[str | None] = mapped_column(String(128))
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class OutboxEvent(Base):
+    """Transactional hand-off record for a worker publisher."""
+
+    __tablename__ = "outbox_events"
+    __table_args__ = (Index("ix_outbox_events_status_created", "status", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    topic: Mapped[str] = mapped_column(String(128), nullable=False)
+    aggregate_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
 
 
 class IdempotencyRecord(Base):

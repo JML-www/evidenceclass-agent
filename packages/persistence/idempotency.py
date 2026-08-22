@@ -95,9 +95,7 @@ class IdempotencyService:
                 record.error_code = getattr(exc, "error_code", type(exc).__name__)
             raise
 
-    def _reserve(
-        self, workspace_id: UUID, endpoint: str, key: str, fingerprint: str
-    ) -> bool:
+    def _reserve(self, workspace_id: UUID, endpoint: str, key: str, fingerprint: str) -> bool:
         try:
             with self._session_factory() as session, session.begin():
                 session.add(
@@ -136,9 +134,7 @@ class IdempotencyService:
         raise IdempotencyTimeout("the original request is still processing")
 
     @staticmethod
-    def _get(
-        session: Session, workspace_id: UUID, endpoint: str, key: str
-    ) -> IdempotencyRecord:
+    def _get(session: Session, workspace_id: UUID, endpoint: str, key: str) -> IdempotencyRecord:
         record = session.scalar(
             select(IdempotencyRecord).where(
                 IdempotencyRecord.workspace_id == workspace_id,

@@ -5,20 +5,20 @@ media into traceable observations, deterministic metrics, review tasks, and repo
 
 The repository currently contains the migrated characterization suite, strict Pydantic
 contracts, the standalone deterministic Evidence Engine, the phase-3 persistence boundary, and
-the phase-4 provider-neutral model gateway, the phase-5 real media pipeline, and the phase-6
-citable RAG boundary.
-PostgreSQL stores business and trace metadata, Redis is reserved for later queue work, and MinIO
+the phase-4 provider-neutral model gateway, the phase-5 real media pipeline, the phase-6
+citable RAG boundary, the phase-7 Agent Runtime, and the phase-8 API/Worker control plane.
+PostgreSQL stores business and trace metadata, Redis brokers Celery tasks, and MinIO
 stores bytes behind tenant-scoped services. Explicit Job, Agent Run, and Tool Call state machines
 and database-backed idempotency make duplicate and out-of-order requests testable. Fake model
-calls now produce a durable trace and five artifacts without network access. It does not yet
-contain an executable production Agent graph, an API, or a Web application.
+calls produce a durable trace and five artifacts without network access. The repository now has an
+executable Agent graph and public API; the original Web application remains phase 9.
 
 ## Current boundary
 
-- Product layer: persistence services now own jobs, upload metadata, idempotency, and retention;
-  HTTP endpoints and the Web product remain future work.
-- Agent layer: versioned checkpoint state and lifecycle transitions are implemented; planning,
-  tool selection, branching, and graph execution remain future work.
+- Product layer: FastAPI owns authenticated jobs, uploads, resources, progress events, reviews,
+  conversations, idempotency, and retention; the Web product remains future work.
+- Agent layer: versioned state, constrained planning, Tool Registry, LangGraph branching,
+  checkpoints, review interruptions, claim verification, and Worker execution are implemented.
 - AI capability layer: provider-neutral Protocols have Fake adapters and optional local
   faster-whisper/RapidOCR paths. OpenAI-compatible and temporary Qwen paths implement vision;
   real VLM trial execution still needs an authorized working endpoint or the optional Qwen runtime.
@@ -139,10 +139,29 @@ claim checks. The offline acceptance includes three distinct graph trajectories,
 recovery without a repeated observation call, authorized single-decision review, and twenty
 deliberately polluted drafts.
 
-The default path remains deterministic and uses no paid model call. Stage 8 will expose this
-runtime through an asynchronous Worker and public API; those product boundaries are intentionally
-not claimed here. See `docs/stage-7-acceptance.md` for the exact evidence and remaining external
-skips.
+The default path remains deterministic and uses no paid model call. See
+`docs/stage-7-acceptance.md` for the exact runtime evidence and remaining external skips.
+
+## Phase-8 asynchronous Worker and API
+
+Run the API/Worker, upload, Outbox, SSE, cancellation, OpenAPI, migration, and regression gate:
+
+```powershell
+.\scripts\accept-stage-8.ps1 -RunFull
+```
+
+Start the local API with the project environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
+```
+
+`POST /jobs/{id}/start` commits an Agent Run and transactional Outbox record before publishing a
+Celery or local task. Workers claim persisted runs, write SQL checkpoints and append-only progress
+events, and reject duplicate delivery. Upload completion verifies workspace ownership, expiry,
+size, MIME signature, and SHA-256. SSE honors `Last-Event-ID`; cancel, retry, and rerun preserve
+different audit semantics. GitHub Actions runs a live Celery/PostgreSQL/Redis integration test in
+addition to the offline Windows suite. See `docs/stage-8-acceptance.md` for limits and evidence.
 
 ## Development setup
 
@@ -169,7 +188,7 @@ On success, the command prints the analysis mode, elapsed time, five artifact pa
 and SHA-256 hashes. Invalid input exits nonzero. The output writer replaces only the five managed
 artifact names and preserves unrelated files in the destination directory.
 
-See `docs/stage-2-acceptance.md` through `docs/stage-7-acceptance.md` for executable acceptance
+See `docs/stage-2-acceptance.md` through `docs/stage-8-acceptance.md` for executable acceptance
 matrices and honest external blockers.
 
 Only synthetic or explicitly authorized fixtures may enter this repository. See

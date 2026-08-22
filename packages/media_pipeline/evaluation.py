@@ -190,8 +190,7 @@ def _edit_counts(reference: str, hypothesis: str) -> tuple[int, int]:
                 min(
                     current[-1] + 1,
                     previous[column_index] + 1,
-                    previous[column_index - 1]
-                    + int(expected_character != actual_character),
+                    previous[column_index - 1] + int(expected_character != actual_character),
                 )
             )
         previous = current

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import audioop
 import math
 import wave
+from array import array
 from pathlib import Path
 from typing import Literal
 
@@ -16,6 +16,23 @@ from packages.model_gateway.interfaces import AsrModel
 from .errors import MediaToolExecutionError
 from .probe import MediaProbe
 from .tools import CommandRunner, SubprocessCommandRunner, resolve_media_tool, sanitized_stderr
+
+try:  # Python 3.13 removed audioop; the tiny fallback keeps deterministic RMS VAD portable.
+    import audioop  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.13+
+
+    class _AudioOpCompat:
+        @staticmethod
+        def rms(data: bytes, width: int) -> int:
+            if width != 2 or len(data) < 2:
+                return 0
+            samples = array("h")
+            samples.frombytes(data[: len(data) - len(data) % 2])
+            if not samples:
+                return 0
+            return round(math.sqrt(sum(sample * sample for sample in samples) / len(samples)))
+
+    audioop = _AudioOpCompat()
 
 AUDIO_POLICY_VERSION = "audio-extraction.v1"
 VAD_POLICY_VERSION = "energy-vad.v1"

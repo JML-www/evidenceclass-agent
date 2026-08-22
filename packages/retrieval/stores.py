@@ -49,9 +49,7 @@ class InMemoryVectorStore:
             )
             for chunk in chunks
         ]
-        return sorted(scored, key=lambda item: (-item.vector_score, item.chunk.chunk_id))[
-            :top_k
-        ]
+        return sorted(scored, key=lambda item: (-item.vector_score, item.chunk.chunk_id))[:top_k]
 
 
 class PgVectorStore:

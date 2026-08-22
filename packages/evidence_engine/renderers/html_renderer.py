@@ -11,19 +11,20 @@ from .common import display_value
 def render_html(result: dict[str, Any]) -> str:
     """Render a dependency-free dashboard that uses canonical result values."""
     metric_rows = "".join(
-        "<tr><th>{}</th><td>{}</td></tr>".format(
-            escape(key), escape(display_value(value, "%"))
-        )
+        "<tr><th>{}</th><td>{}</td></tr>".format(escape(key), escape(display_value(value, "%")))
         for key, value in result["summary"]["metrics"].items()
     )
-    evidence_items = "".join(
-        "<li><strong>{}</strong> <span>{}</span><p>{}</p></li>".format(
-            escape(item["evidence_id"]),
-            escape(item["source_ref"]),
-            escape(item["fact"]),
+    evidence_items = (
+        "".join(
+            "<li><strong>{}</strong> <span>{}</span><p>{}</p></li>".format(
+                escape(item["evidence_id"]),
+                escape(item["source_ref"]),
+                escape(item["fact"]),
+            )
+            for item in result["evidence"]
         )
-        for item in result["evidence"]
-    ) or "<li>No evidence was supplied.</li>"
+        or "<li>No evidence was supplied.</li>"
+    )
     action_items = "".join(
         "<li><strong>{} / {} ({})</strong><p>{}</p><p>Retest: {}</p></li>".format(
             escape(action["actionId"]),

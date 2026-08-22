@@ -57,9 +57,7 @@ class DocumentParser:
             try:
                 text = source.read_text(encoding="utf-8-sig")
             except UnicodeDecodeError as exc:
-                raise DocumentParseError(
-                    f"UTF-8 decode failed at byte {exc.start}"
-                ) from exc
+                raise DocumentParseError(f"UTF-8 decode failed at byte {exc.start}") from exc
             sections = self._parse_structured_text(text, fallback_heading=title, page=None)
         if not sections:
             raise DocumentParseError("no extractable text was found")
@@ -126,9 +124,7 @@ class DocumentParser:
         def flush() -> None:
             content = "\n".join(buffer).strip()
             if content:
-                sections.append(
-                    ParsedSection(page=page, heading=current_heading, content=content)
-                )
+                sections.append(ParsedSection(page=page, heading=current_heading, content=content))
             buffer.clear()
 
         for raw_line in text.replace("\r\n", "\n").split("\n"):

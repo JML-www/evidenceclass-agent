@@ -72,10 +72,7 @@ def merge(results: list[dict[str, Any]]) -> dict[str, Any]:
     )
     indices = [int(item["segment"]["index"]) for item in ordered]
     expected_count = max(
-        [
-            int(item["segment"].get("expectedTotalSegments", max(indices)))
-            for item in ordered
-        ]
+        [int(item["segment"].get("expectedTotalSegments", max(indices))) for item in ordered]
     )
     if indices != list(range(1, expected_count + 1)):
         missing = sorted(set(range(1, expected_count + 1)) - set(indices))

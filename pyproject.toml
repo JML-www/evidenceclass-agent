@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "alembic>=1.13,<2.0",
+  "celery>=5.4,<6.0",
+  "fastapi>=0.115,<1.0",
   "langgraph>=1.0,<2.0",
   "minio>=7.2,<8.0",
   "openai>=2.0,<3.0",
@@ -18,7 +20,8 @@ dependencies = [
   "pypdf>=6.0,<7.0",
   "pydantic>=2.0,<3.0",
   "redis>=5.0,<7.0",
-  "sqlalchemy>=2.0,<3.0"
+  "sqlalchemy>=2.0,<3.0",
+  "uvicorn>=0.30,<1.0"
 ]
 
 [project.scripts]
@@ -71,3 +74,4 @@ extend-exclude = ["packages/persistence/migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]

@@ -76,9 +76,7 @@ class SqlKnowledgeRepository:
             if document is None:
                 raise SourceRegistrationError(f"unknown document_id: {document_id}")
             session.execute(
-                delete(SqlKnowledgeChunk).where(
-                    SqlKnowledgeChunk.document_id == document_uuid
-                )
+                delete(SqlKnowledgeChunk).where(SqlKnowledgeChunk.document_id == document_uuid)
             )
             for chunk in parsed:
                 session.add(

@@ -10,7 +10,7 @@ layers remain separate even while they live in one repository.
 | AI capability | ASR, OCR, VLM, LLM, embedding, and reranking adapters | Business authorization |
 | Deterministic | Schema, validation, metrics, evidence, hashes, and artifact consistency | Guesses about missing facts |
 
-Planned request flow:
+Implemented request flow:
 
 ```text
 Web -> API/control plane -> asynchronous worker -> Agent runtime
@@ -19,9 +19,9 @@ Web -> API/control plane -> asynchronous worker -> Agent runtime
                                          `-> deterministic evidence engine
 ```
 
-The current milestone implements the citable retrieval boundary through tutorial phase 6. The
-deterministic engine remains independent, while SQLAlchemy models and Alembic own durable
-metadata. PostgreSQL,
+The current milestone implements the public control plane through tutorial phase 8. The
+deterministic engine remains independent, while FastAPI owns HTTP contracts and SQLAlchemy plus
+Alembic own durable metadata. PostgreSQL,
 password-protected Redis, and MinIO have pinned Compose services, health checks, and named volumes.
 
 Three lifecycle levels are deliberately independent:
@@ -122,7 +122,22 @@ installed. The word “temporary” is part of its provider and evaluation ident
 final model selection, and its local execution cost records external API cost as zero while
 excluding electricity and hardware cost.
 
-The current `AgentState` is still a checkpoint contract, not an executable production Agent.
-`FakeStage4AcceptanceHarness` proves Job -> trace -> model call -> deterministic engine -> five
-artifacts only for integration acceptance. Agent graph execution, API routes, Workers, and the Web
-product remain later phases.
+The phase-8 control plane keeps long work out of HTTP requests:
+
+```text
+authenticated API -> Job + Agent Run + Outbox commit -> Celery/Redis -> RuntimeWorker
+       |                                                        |
+       `-> presigned upload + strict completion                  `-> SQL checkpoint + events
+```
+
+The publisher retries stored Outbox rows when a broker is unavailable. A Worker atomically claims
+only a queued, active Run; repeated delivery returns `SKIPPED`. API and Worker communicate progress
+through append-only SQL events, and SSE replays rows after `Last-Event-ID`. Cancellation first makes
+the database state terminal, then revokes the task; this ordering prevents a late Worker result
+from changing `CANCELLED` to success. Retry reuses the failed Run/checkpoint while rerun creates a
+new Run and retains previous results.
+
+`FakeStage4AcceptanceHarness` remains the model-independent artifact fixture, while phase 7 and 8
+tests now execute the real deterministic Agent graph through the Worker boundary. The original Web
+product remains phase 9; current authentication is deliberately minimal and not the complete
+phase-13 identity, RBAC, or privacy implementation.

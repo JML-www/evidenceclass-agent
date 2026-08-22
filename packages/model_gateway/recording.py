@@ -39,9 +39,7 @@ class SqlAlchemyModelCallRecorder:
                     cost=usage.cost_usd if usage is not None else None,
                     cost_known=usage is not None and usage.cost_usd is not None,
                     latency_ms=(
-                        round(attempt.latency_ms)
-                        if attempt.latency_ms is not None
-                        else None
+                        round(attempt.latency_ms) if attempt.latency_ms is not None else None
                     ),
                     raw_response_ref=attempt.raw_response_ref,
                     status=attempt.status,

@@ -78,8 +78,7 @@ class LocalQwen35Adapter:
             {
                 "role": "user",
                 "content": (
-                    "Return only one JSON object with no Markdown fence. It must satisfy: "
-                    + schema
+                    "Return only one JSON object with no Markdown fence. It must satisfy: " + schema
                 ),
             }
         )
@@ -91,7 +90,6 @@ class LocalQwen35Adapter:
         return ChatResult(metadata=metadata, parsed=parsed)
 
     def observe(self, request: VisionRequest) -> VisionResult:
-        schema = json.dumps(VisionOutput.model_json_schema(), ensure_ascii=False, sort_keys=True)
         content: list[dict[str, Any]] = [
             {"type": "image", "url": image_ref} for image_ref in request.image_refs
         ]
@@ -100,15 +98,28 @@ class LocalQwen35Adapter:
                 "type": "text",
                 "text": (
                     request.instruction
-                    + " Return only one JSON object without Markdown fences. Use null for unknown. "
-                    + "Do not infer identity, emotion, ability, diagnosis, or discipline. Schema: "
-                    + schema
+                    + (
+                        "\nReturn exactly one compact JSON object with no Markdown or extra "
+                        "properties. "
+                    )
+                    + (
+                        "Do not infer identity, emotion, ability, diagnosis, discipline, or "
+                        "whole-lesson "
+                    )
+                    + "quality. Omit the optional regions property entirely. Use this exact shape: "
+                    + _VISION_OUTPUT_TEMPLATE
+                    + (
+                        " Evidence and limitations must each contain one or two short strings. "
+                        "Every student "
+                    )
+                    + "behavior count must be no greater than visible_student_count."
                 ),
             }
         )
-        raw, metadata = self._generate(
-            [{"role": "user", "content": content}], request.context
+        compact_context = request.context.model_copy(
+            update={"max_output_tokens": min(request.context.max_output_tokens, 320)}
         )
+        raw, metadata = self._generate([{"role": "user", "content": content}], compact_context)
         try:
             parsed = VisionOutput.model_validate(raw)
         except ValidationError as exc:
@@ -134,9 +145,7 @@ class LocalQwen35Adapter:
                 ),
             }
         )
-        raw, metadata = self._generate(
-            [{"role": "user", "content": content}], request.context
-        )
+        raw, metadata = self._generate([{"role": "user", "content": content}], request.context)
         return StructuredVisionResult(
             metadata=metadata,
             parsed=StructuredVisionOutput(structured=raw),
@@ -173,7 +182,7 @@ class LocalQwen35Adapter:
             json.dumps({"generated_text": text}, ensure_ascii=False).encode("utf-8")
         )
         try:
-            parsed = json.loads(text)
+            parsed = json.loads(_normalize_json_text(text))
         except json.JSONDecodeError as exc:
             raise SchemaParseError(
                 "local Qwen response was not valid JSON",
@@ -206,3 +215,44 @@ class LocalQwen35Adapter:
     def _config_revision(self) -> str:
         digest = hashlib.sha256((self._model_path / "config.json").read_bytes()).hexdigest()
         return f"local-config-sha256:{digest[:16]}"
+
+
+def _normalize_json_text(text: str) -> str:
+    """Accept the common Markdown fence emitted despite a JSON-only prompt."""
+
+    normalized = text.strip()
+    if normalized.startswith("```") and normalized.endswith("```"):
+        lines = normalized.splitlines()
+        normalized = "\n".join(lines[1:-1]).strip()
+    if normalized.lower().startswith("json\n"):
+        normalized = normalized[5:].lstrip()
+    return normalized
+
+
+_VISION_OUTPUT_TEMPLATE = json.dumps(
+    {
+        "observation": {
+            "frame_id": "frame-1",
+            "visible_student_count": 0,
+            "focused": 0,
+            "head_down_reading_or_writing": 0,
+            "hand_raised": 0,
+            "discussion": 0,
+            "distracted": 0,
+            "teacher": {
+                "teaching": False,
+                "blackboard_writing": False,
+                "patrolling": False,
+                "questioning": False,
+                "organizing_discussion": False,
+                "guiding_students": False,
+                "using_slides": False,
+            },
+            "evidence": ["visible fact"],
+            "limitations": ["visible-frame limitation"],
+            "confidence": 0.0,
+        }
+    },
+    ensure_ascii=False,
+    separators=(",", ":"),
+)

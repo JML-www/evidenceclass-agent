@@ -173,8 +173,6 @@ class FakeModelGateway:
                 audio_seconds=3.0 if capability == "asr" else 0.0,
                 cost_usd=0.001,
             ),
-            raw_response_ref=(
-                f"fixture://model-gateway/{self._fixture_path.name}#{capability}"
-            ),
+            raw_response_ref=(f"fixture://model-gateway/{self._fixture_path.name}#{capability}"),
             provider_request_id=f"fake-{capability}-request",
         )

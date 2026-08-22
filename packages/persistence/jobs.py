@@ -18,7 +18,7 @@ from packages.agent_runtime.state_machines import (
 )
 
 from .idempotency import IdempotencyService
-from .models import AgentRun, AnalysisJob, ReviewItem
+from .models import AgentRun, AnalysisJob, OutboxEvent, ReviewItem
 
 
 class ResourceNotFound(LookupError):
@@ -52,6 +52,7 @@ class JobLifecycleService:
                 mode=mode,
                 status=JobState.CREATED.value,
                 idempotency_key=idempotency_key,
+                request_json=payload,
             )
             session.add(job)
             session.flush()
@@ -138,6 +139,13 @@ class JobLifecycleService:
             )
             session.add(run)
             session.flush()
+            session.add(
+                OutboxEvent(
+                    topic="agent.run.requested",
+                    aggregate_id=run.id,
+                    payload_json={"job_id": str(job_id), "run_id": str(run.id)},
+                )
+            )
             return {
                 "job_id": str(job_id),
                 "run_id": str(run.id),
@@ -151,6 +159,134 @@ class JobLifecycleService:
             key=idempotency_key,
             payload=payload,
             operation=start,
+            response_ref=lambda response: f"run:{response['run_id']}",
+        )
+
+    def retry_job(
+        self,
+        *,
+        workspace_id: UUID,
+        job_id: UUID,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Requeue a failed run while retaining its audit history."""
+
+        endpoint = f"POST /jobs/{job_id}/retry"
+
+        def retry(session: Session) -> dict[str, Any]:
+            job = session.scalar(
+                select(AnalysisJob).where(
+                    AnalysisJob.id == job_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if job is None:
+                raise ResourceNotFound("job not found")
+            if job.status != JobState.FAILED.value:
+                raise ValueError("only a failed job can be retried")
+            run = session.scalar(
+                select(AgentRun)
+                .where(AgentRun.job_id == job_id)
+                .order_by(AgentRun.created_at.desc())
+                .limit(1)
+            )
+            if run is None:
+                raise ValueError("job has no Agent run to retry")
+            job.status = JobState.QUEUED.value
+            job.progress = 0
+            run.status = AgentRunState.INITIALIZING.value
+            run.active_slot = "active"
+            run.checkpoint_id = run.checkpoint_id
+            session.add(
+                OutboxEvent(
+                    topic="agent.run.requested",
+                    aggregate_id=run.id,
+                    payload_json={"job_id": str(job_id), "run_id": str(run.id), "action": "retry"},
+                )
+            )
+            return {
+                "job_id": str(job_id),
+                "run_id": str(run.id),
+                "job_status": job.status,
+                "run_status": run.status,
+            }
+
+        return self._idempotency.execute(
+            workspace_id=workspace_id,
+            endpoint=endpoint,
+            key=idempotency_key,
+            payload={"job_id": str(job_id), "action": "retry"},
+            operation=retry,
+            response_ref=lambda response: f"run:{response['run_id']}",
+        )
+
+    def rerun_job(
+        self,
+        *,
+        workspace_id: UUID,
+        job_id: UUID,
+        idempotency_key: str,
+        graph_version: str = "agent-graph.v0.1",
+    ) -> dict[str, Any]:
+        """Create a new run without overwriting the previous run or artifacts."""
+
+        endpoint = f"POST /jobs/{job_id}/rerun"
+
+        def rerun(session: Session) -> dict[str, Any]:
+            job = session.scalar(
+                select(AnalysisJob).where(
+                    AnalysisJob.id == job_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if job is None:
+                raise ResourceNotFound("job not found")
+            if job.status not in {
+                JobState.SUCCEEDED.value,
+                JobState.FAILED.value,
+                JobState.CANCELLED.value,
+                JobState.NEEDS_REVIEW.value,
+            }:
+                raise ValueError(f"job in {job.status} cannot be rerun")
+            active = session.scalar(
+                select(AgentRun).where(AgentRun.job_id == job_id, AgentRun.active_slot == "active")
+            )
+            if active is not None:
+                raise ValueError("job already has an active run")
+            run = AgentRun(
+                id=uuid4(),
+                job_id=job_id,
+                graph_version=graph_version,
+                status=AgentRunState.INITIALIZING.value,
+                budget_json={},
+                active_slot="active",
+            )
+            job.status = JobState.QUEUED.value
+            job.progress = 0
+            session.add(run)
+            session.flush()
+            session.add(
+                OutboxEvent(
+                    topic="agent.run.requested",
+                    aggregate_id=run.id,
+                    payload_json={"job_id": str(job_id), "run_id": str(run.id), "action": "rerun"},
+                )
+            )
+            return {
+                "job_id": str(job_id),
+                "run_id": str(run.id),
+                "job_status": job.status,
+                "run_status": run.status,
+            }
+
+        return self._idempotency.execute(
+            workspace_id=workspace_id,
+            endpoint=endpoint,
+            key=idempotency_key,
+            payload={"job_id": str(job_id), "action": "rerun"},
+            operation=rerun,
             response_ref=lambda response: f"run:{response['run_id']}",
         )
 
@@ -183,12 +319,8 @@ class JobLifecycleService:
                         ),
                     )
                 )
-                review_decision = (
-                    ReviewDecision.APPROVED if approved is not None else None
-                )
-            next_state = transition(
-                JobState(job.status), event, review_decision=review_decision
-            )
+                review_decision = ReviewDecision.APPROVED if approved is not None else None
+            next_state = transition(JobState(job.status), event, review_decision=review_decision)
             job.status = next_state.value
             return next_state
 
@@ -215,9 +347,7 @@ class JobLifecycleService:
                     .limit(1)
                 )
                 review_decision = (
-                    ReviewDecision(recorded_decision)
-                    if recorded_decision is not None
-                    else None
+                    ReviewDecision(recorded_decision) if recorded_decision is not None else None
                 )
             next_state = transition(
                 AgentRunState(run.status), event, review_decision=review_decision
@@ -226,3 +356,29 @@ class JobLifecycleService:
             if next_state in {AgentRunState.COMPLETED, AgentRunState.ERRORED}:
                 run.active_slot = None
             return next_state
+
+    def cancel_job(self, *, workspace_id: UUID, job_id: UUID) -> dict[str, Any]:
+        """Mark a job cancelled; late worker completion is intentionally ignored."""
+
+        with self._sessions() as session, session.begin():
+            job = session.scalar(
+                select(AnalysisJob).where(
+                    AnalysisJob.id == job_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if job is None:
+                raise ResourceNotFound("job not found")
+            if job.status not in {
+                JobState.SUCCEEDED.value,
+                JobState.FAILED.value,
+                JobState.CANCELLED.value,
+            }:
+                job.status = JobState.CANCELLED.value
+            for run in session.scalars(
+                select(AgentRun).where(AgentRun.job_id == job_id, AgentRun.active_slot == "active")
+            ):
+                run.status = AgentRunState.ERRORED.value
+                run.active_slot = None
+            return {"job_id": str(job.id), "status": job.status, "progress": job.progress}

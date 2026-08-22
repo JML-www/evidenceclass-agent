@@ -64,18 +64,14 @@ class AnalysisResult(BaseContract):
 
     @field_validator("lesson_duration_sec")
     @classmethod
-    def validate_image_duration(
-        cls, value: float | None, info: ValidationInfo
-    ) -> float | None:
+    def validate_image_duration(cls, value: float | None, info: ValidationInfo) -> float | None:
         if info.data.get("analysis_mode") == "image" and value is not None:
             raise ValueError("lesson_duration_sec is unavailable in image mode")
         return value
 
     @field_validator("teacher_speaking_ratio")
     @classmethod
-    def validate_teacher_ratio(
-        cls, value: float | None, info: ValidationInfo
-    ) -> float | None:
+    def validate_teacher_ratio(cls, value: float | None, info: ValidationInfo) -> float | None:
         if value is not None and info.data.get("speaker_diarization_available") is not True:
             raise ValueError("teacher_speaking_ratio requires speaker_diarization_available")
         return value

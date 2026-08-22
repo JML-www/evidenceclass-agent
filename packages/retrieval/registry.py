@@ -124,10 +124,7 @@ class InMemoryKnowledgeRepository:
             for document_id, record in self._documents.items()
             if record.status is DocumentStatus.PUBLISHED
             and record.registration.workspace_id == filters.workspace_id
-            and (
-                not filters.source_ids
-                or record.registration.source_id in filters.source_ids
-            )
+            and (not filters.source_ids or record.registration.source_id in filters.source_ids)
             and (not filters.versions or record.registration.version in filters.versions)
         }
         return [
