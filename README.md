@@ -11,12 +11,13 @@ PostgreSQL stores business and trace metadata, Redis brokers Celery tasks, and M
 stores bytes behind tenant-scoped services. Explicit Job, Agent Run, and Tool Call state machines
 and database-backed idempotency make duplicate and out-of-order requests testable. Fake model
 calls produce a durable trace and five artifacts without network access. The repository now has an
-executable Agent graph and public API; the original Web application remains phase 9.
+executable Agent graph, public API, and the phase-9 original Web product foundation.
 
 ## Current boundary
 
 - Product layer: FastAPI owns authenticated jobs, uploads, resources, progress events, reviews,
-  conversations, idempotency, and retention; the Web product remains future work.
+  conversations, idempotency, and retention; `apps/web` provides the original React workbench
+  with an explicit Mock API boundary while local infrastructure is unavailable.
 - Agent layer: versioned state, constrained planning, Tool Registry, LangGraph branching,
   checkpoints, review interruptions, claim verification, and Worker execution are implemented.
 - AI capability layer: provider-neutral Protocols have Fake adapters and optional local
@@ -162,6 +163,26 @@ events, and reject duplicate delivery. Upload completion verifies workspace owne
 size, MIME signature, and SHA-256. SSE honors `Last-Event-ID`; cancel, retry, and rerun preserve
 different audit semantics. GitHub Actions runs a live Celery/PostgreSQL/Redis integration test in
 addition to the offline Windows suite. See `docs/stage-8-acceptance.md` for limits and evidence.
+
+## Phase-9 original Web product
+
+The new product surface is in `apps/web`; it does not reuse the old application's assets or CSS.
+It includes the task centre, new analysis flow, Agent Run timeline, evidence browser, review
+workbench, result and evidence-first Q&A pages, responsive tokens, and Playwright smoke tests.
+It defaults to deterministic Mock API data so UI states can be exercised without Docker:
+
+```powershell
+Set-Location -LiteralPath ".\apps\web"
+npm install
+npm run dev
+npm run build
+npm run test:e2e
+```
+
+Set `VITE_USE_MOCK_API=false` and `VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1` when the
+phase-8 API is running. The current machine has not installed the Node dependency graph because
+the registry is unreachable with the user's ladder disabled; this is recorded in the development
+log and is not reported as a build pass.
 
 ## Development setup
 
