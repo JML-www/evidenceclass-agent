@@ -112,3 +112,10 @@ Optional real local ASR/OCR gate:
 If direct Hugging Face access is unavailable, an explicitly trusted mirror may be passed through
 `-HfEndpoint`; model data is cached only below ignored `.media-runtime/`. No endpoint, model, or
 mirror is silently selected by repository code.
+
+Latest local run (2026-08-24) used the cached `Systran/faster-whisper-tiny` model with CPU int8
+and the RapidOCR adapter. The 300-second authorized synthetic fixture completed successfully;
+the report is `runs/stage5-real-media-eval/report.json` (overall ASR CER 59.88%, filtered OCR
+evaluation has no error trials). This is a reproducible pipeline baseline, not a classroom
+accuracy claim. The 30-diagram real VLM evaluation remains unclaimed until a compatible model is
+authorized or supplied.

@@ -30,15 +30,15 @@ Set-Location -LiteralPath "."
 - 结果与问答：`AnalysisResult` 展示、证据引用 chips、无依据回答边界和报告下载入口。
 - 响应式布局：桌面、平板和窄屏下无横向溢出，控件有可访问名称。
 
-当前运行结果：`npm audit --omit=optional`、`npm test` 和 `npm run build` 已通过；`npm run test:e2e` 需要先执行 `npx playwright install chromium`。本机尝试下载 Chromium 超过约 3 分钟未完成，因此浏览器 E2E 和截图仍保留为外部下载跳过项。
+当前运行结果：`npm audit --omit=optional`（使用官方 npm registry）、`npm test`、`npm run build` 和 `npm run test:e2e` 均通过。Playwright Chromium 使用本机缓存目录 `E:\playwright-browsers`；4 个 E2E 用例包含 1440、1024 和 390 宽度的响应式无横向溢出检查，并生成临时截图到被 Git 忽略的 `test-results/`。
 
 ## 跳过项与后续兼容性
 
-以下项目本轮明确跳过，但不会阻塞阶段十及后续阶段：
+以下项目仍明确跳过，但不会阻塞阶段十及后续阶段：
 
-1. **Node 依赖安装、Vite 构建和 Playwright 浏览器运行**：当前机器未缓存依赖，离线 `npm install` 因缺少 `@playwright/test` 返回 `ENOTCACHED`。完成一次 `npm install` 后即可执行，不需要改动页面契约。
-2. **真实 SSE Worker 验收**：`streamJobEvents` 已实现 `Last-Event-ID` 和事件解析；真实连续事件与断线重连仍依赖阶段八 live 服务和前端依赖。
-3. **多宽度浏览器截图**：CSS 已包含 1440、1024、850、600 和 390 附近的响应式断点；真实截图验收待依赖安装后执行，不能以静态检查代替。
+1. **真实 SSE 连续事件与断线重连的浏览器级验收**：客户端 `Last-Event-ID` 接缝和阶段八服务端单测已通过，但仍需带认证的真实 Worker 长连接场景；不能用 Mock 代替。
+2. **真实 VLM/远端 OpenAI-compatible 模型效果**：需要有效模型授权和权重；当前远端接口此前返回 403，因此不伪造效果结论。
+3. **Qwen 本地环境**：按用户明确要求，本轮不检查、不修改、不运行 Qwen。
 
 已解决的离线部分：`scripts/generate-web-openapi.py` 已生成 15 个 TypeScript schema；新建分析页已接入 Job、签名 URL 上传、SHA-256 完成确认；复核按钮已接入 `decideReview` 适配器。真实后端调用只在有认证和基础设施时执行，不把 Mock 结果写成 live 证据。
 

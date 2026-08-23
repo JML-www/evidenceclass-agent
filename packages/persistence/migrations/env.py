@@ -16,17 +16,24 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 POSTGRES_ONLY_INDEXES = {"ix_knowledge_chunks_embedding_hnsw"}
+# The stage-3 acceptance probe creates this short-lived table outside the
+# application schema so it can verify PostgreSQL volume persistence.  It is
+# intentionally not part of ``Base.metadata`` and therefore must not be
+# reported as schema drift by ``alembic check`` while the probe is present.
+RUNTIME_PROBE_TABLES = {"stage3_persistence_probe"}
 
 
 def database_url() -> str:
     return os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
 
 
-def include_object(_object, name, type_, _reflected, _compare_to) -> bool:
-    """Keep PostgreSQL-only indexes out of SQLite autogenerate drift checks."""
+def include_object(_object, name, type_, reflected, compare_to) -> bool:
+    """Exclude implementation-only objects from autogenerate drift checks."""
 
     if type_ == "index" and name in POSTGRES_ONLY_INDEXES:
         return context.get_context().dialect.name == "postgresql"
+    if type_ == "table" and name in RUNTIME_PROBE_TABLES:
+        return not (reflected and compare_to is None)
     return True
 
 

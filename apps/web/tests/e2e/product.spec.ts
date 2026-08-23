@@ -13,9 +13,9 @@ test('task centre exposes the core product workflow', async ({ page }) => {
 test('evidence browser distinguishes raw, deterministic, and explanation layers', async ({ page }) => {
   await page.goto('/evidence')
   await expect(page.getByRole('heading', { name: '证据浏览器' })).toBeVisible()
-  await expect(page.getByText('原始观察')).toBeVisible()
-  await expect(page.getByText('确定性结果')).toBeVisible()
-  await expect(page.getByText(/LLM 解释/)).toBeVisible()
+  await expect(page.getByText('原始观察').first()).toBeVisible()
+  await expect(page.getByText('确定性结果').first()).toBeVisible()
+  await expect(page.getByText(/LLM 解释/).first()).toBeVisible()
 })
 
 test('review workspace has an accessible decision form', async ({ page }) => {

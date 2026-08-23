@@ -21,7 +21,10 @@ $env:VITE_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 ```powershell
 npm run build
+$env:PLAYWRIGHT_BROWSERS_PATH = "E:\playwright-browsers"
 npm run test:e2e
 ```
 
-核心页面覆盖任务中心、新建分析、Agent Run 时间线、证据浏览器、复核工作台以及结果问答。界面只展示结构化计划、工具摘要和证据，不展示模型私有思维链。
+Playwright 验收包含任务中心、新建分析、Agent Run 时间线、证据浏览器、复核工作台、结果问答，
+以及 1440/1024/390 宽度的无横向溢出检查和临时截图。界面只展示结构化计划、工具摘要和证据，
+不展示模型私有思维链。
