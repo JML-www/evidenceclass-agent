@@ -180,9 +180,9 @@ npm run test:e2e
 ```
 
 Set `VITE_USE_MOCK_API=false` and `VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1` when the
-phase-8 API is running. The current machine has not installed the Node dependency graph because
-the registry is unreachable with the user's ladder disabled; this is recorded in the development
-log and is not reported as a build pass.
+phase-8 API is running. The dependency graph is installed locally; the latest phase-10 acceptance passed `npm test`,
+`npm run build`, and five Playwright E2E cases. These checks exercise the deterministic Mock API by
+default; real API mode still requires the phase-8 service and valid authentication.
 
 ## Development setup
 

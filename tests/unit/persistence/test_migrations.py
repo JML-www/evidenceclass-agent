@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "observations",
     "evidence_items",
     "review_items",
+    "review_audits",
     "artifacts",
     "knowledge_documents",
     "knowledge_chunks",

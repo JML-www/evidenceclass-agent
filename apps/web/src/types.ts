@@ -35,3 +35,41 @@ export type Evidence = {
   explanation: string
   confidence: number
 }
+
+export type Citation = {
+  evidence_id?: string
+  citation_id?: string
+  source_ref?: string
+  document_id?: string
+  chunk_id?: string
+  page?: number
+  version?: string
+  fact?: string
+  limitations?: string[]
+}
+
+export type ConversationMessage = {
+  message_id: string
+  conversation_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  citations: Citation[]
+  evidence_available: boolean
+  source?: string
+  limitations: string[]
+  boundary: Record<string, unknown>
+  created_at?: string
+}
+
+export type Answer = {
+  conversation_id: string
+  user_message: ConversationMessage
+  assistant_message: ConversationMessage
+  answer: string
+  citations: Citation[]
+  evidence_available: boolean
+  source: string
+  limitations: string[]
+  boundary: Record<string, unknown>
+  summary_version: number
+}

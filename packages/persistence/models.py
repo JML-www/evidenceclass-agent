@@ -255,6 +255,36 @@ class ReviewItem(IdTimestampMixin, Base):
     revised_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class ReviewAudit(IdTimestampMixin, Base):
+    """Immutable audit event for a human feedback decision.
+
+    ``ReviewItem`` is the current state; this table keeps every decision event so
+    corrections never overwrite the original model output or earlier audit data.
+    """
+
+    __tablename__ = "review_audits"
+    __table_args__ = (
+        Index("ix_review_audits_job_created", "job_id", "created_at"),
+        Index("ix_review_audits_reviewer_created", "reviewer_id", "created_at"),
+    )
+
+    review_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("review_items.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    reviewer_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    original_payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    revised_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    evidence_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class Artifact(IdTimestampMixin, Base):
     __tablename__ = "artifacts"
     __table_args__ = (
@@ -347,6 +377,12 @@ class Conversation(IdTimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="SET NULL")
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    summary_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    summary_hash: Mapped[str | None] = mapped_column(String(64))
+    summary_source_start: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    summary_source_end: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    summary_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Message(IdTimestampMixin, Base):
@@ -359,6 +395,10 @@ class Message(IdTimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source: Mapped[str | None] = mapped_column(String(64))
+    limitations: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    boundary_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class EvaluationRun(IdTimestampMixin, Base):

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Generator
+from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -19,15 +22,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from apps.api.auth import TokenService, verify_password
 from apps.api.config import AppSettings
 from apps.api.schemas import (
+    AnswerResponse,
     AssetResponse,
+    BoundaryResponse,
     ConversationRequest,
+    ConversationResponse,
+    ConversationSummaryResponse,
     CreateJobRequest,
+    FeedbackRequest,
     JobResponse,
     KnowledgeDocumentRequest,
     LoginRequest,
     LoginResponse,
     MessageRequest,
+    MessageResponse,
     ReviewDecisionRequest,
+    ReviewItemResponse,
+    ReviewStatsResponse,
     StartResponse,
     UploadCompleteRequest,
     UploadInitRequest,
@@ -35,6 +46,7 @@ from apps.api.schemas import (
 )
 from apps.worker.queue import CeleryTaskQueue, InProcessTaskQueue
 from apps.worker.runtime import RuntimeWorker
+from packages.agent_runtime.review import ReviewError
 from packages.object_storage.service import (
     ObjectStorageService,
     StorageValidationError,
@@ -54,9 +66,12 @@ from packages.persistence.models import (
     AgentStep,
     AnalysisJob,
     Conversation,
+    EvidenceItem,
+    KnowledgeChunk,
     KnowledgeDocument,
     MediaAsset,
     Message,
+    ReviewAudit,
     ReviewItem,
     UploadSession,
     User,
@@ -107,6 +122,43 @@ def _job_response(job: AnalysisJob) -> JobResponse:
         updated_at=job.updated_at,
         error_code=job.error_code,
         error_message=job.error_message,
+    )
+
+
+def _message_response(message: Message) -> MessageResponse:
+    return MessageResponse(
+        message_id=message.id,
+        conversation_id=message.conversation_id,
+        role=message.role,
+        content=message.content,
+        citations=list(message.citations or []),
+        evidence_available=bool(message.evidence_available),
+        source=message.source,
+        limitations=list(message.limitations or []),
+        boundary=dict(message.boundary_json or {}),
+        created_at=message.created_at,
+    )
+
+
+def _review_response(item: ReviewItem) -> ReviewItemResponse:
+    payload = dict(item.original_payload_json or {})
+    revised = item.revised_payload_json
+    evidence_ids = payload.get("evidence_ids", [])
+    if not isinstance(evidence_ids, list):
+        evidence_ids = []
+    return ReviewItemResponse(
+        review_id=item.id,
+        job_id=item.job_id,
+        status=item.status,
+        decision=item.decision,
+        reason=item.note or str(payload.get("reason", "")),
+        reviewer_id=item.reviewer_id,
+        revision=item.revision,
+        original_observation=dict(payload.get("observation", payload)),
+        revised_observation=dict(revised) if isinstance(revised, dict) else None,
+        evidence_ids=[str(value) for value in evidence_ids],
+        created_at=item.created_at,
+        decided_at=item.decided_at,
     )
 
 
@@ -682,6 +734,18 @@ def create_app(
             )
             if item is None:
                 raise APIError("RESOURCE_NOT_FOUND", "review item not found", status_code=404)
+            if not payload.note.strip():
+                raise APIError(
+                    "REVIEW_REASON_REQUIRED",
+                    "an audit reason is required for every review decision",
+                    status_code=422,
+                )
+            original_payload = dict(item.original_payload_json or {})
+            revision = int(item.revision or 0) + 1
+            job_id_for_audit = item.job_id
+            audit_evidence_ids = original_payload.get("evidence_ids", [])
+            if not isinstance(audit_evidence_ids, list):
+                audit_evidence_ids = []
         from packages.persistence.agent_runtime import SqlReviewService
 
         try:
@@ -695,7 +759,199 @@ def create_app(
             )
         except Exception as exc:
             raise _map_domain_error(exc) from exc
+        with session_factory() as session, session.begin():
+            item = session.get(ReviewItem, review_id)
+            if item is not None:
+                session.add(
+                    ReviewAudit(
+                        id=uuid4(),
+                        review_id=review_id,
+                        job_id=job_id_for_audit,
+                        reviewer_id=str(user["user_id"]),
+                        decision=payload.decision,
+                        reason=payload.note.strip(),
+                        original_payload_json=original_payload,
+                        revised_payload_json=(
+                            dict(payload.revised_observation)
+                            if payload.revised_observation is not None
+                            else None
+                        ),
+                        evidence_ids=[str(value) for value in audit_evidence_ids],
+                        revision=revision,
+                    )
+                )
         return {"review_id": str(review_id), "status": "DECIDED", "decision": payload.decision}
+
+    @app.get("/api/v1/review-items", response_model=list[ReviewItemResponse])
+    def list_review_items(
+        job_id: UUID | None = None,
+        decision: str | None = None,
+        reviewer_id: str | None = None,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        sc=Depends(scope),
+    ):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            statement = select(ReviewItem).join(AnalysisJob, ReviewItem.job_id == AnalysisJob.id)
+            statement = statement.where(AnalysisJob.workspace_id == workspace_id)
+            if job_id is not None:
+                # Scope the filter to this workspace before returning any row.
+                get_job(session, job_id, workspace_id)
+                statement = statement.where(ReviewItem.job_id == job_id)
+            if decision is not None:
+                statement = statement.where(ReviewItem.decision == decision)
+            if reviewer_id is not None:
+                statement = statement.where(ReviewItem.reviewer_id == reviewer_id)
+            if from_time is not None:
+                statement = statement.where(ReviewItem.created_at >= from_time)
+            if to_time is not None:
+                statement = statement.where(ReviewItem.created_at <= to_time)
+            rows = session.scalars(statement.order_by(ReviewItem.created_at.asc())).all()
+            return [_review_response(row) for row in rows]
+
+    @app.get("/api/v1/review-items/stats", response_model=ReviewStatsResponse)
+    def review_stats(job_id: UUID | None = None, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            statement = select(ReviewItem).join(AnalysisJob, ReviewItem.job_id == AnalysisJob.id)
+            statement = statement.where(AnalysisJob.workspace_id == workspace_id)
+            if job_id is not None:
+                get_job(session, job_id, workspace_id)
+                statement = statement.where(ReviewItem.job_id == job_id)
+            rows = session.scalars(statement).all()
+            by_decision: dict[str, int] = {}
+            for row in rows:
+                if row.decision:
+                    by_decision[row.decision] = by_decision.get(row.decision, 0) + 1
+            return ReviewStatsResponse(
+                total=len(rows),
+                pending=sum(row.status == "PENDING" for row in rows),
+                decided=sum(row.status == "DECIDED" for row in rows),
+                by_decision=by_decision,
+            )
+
+    @app.get("/api/v1/review-items/{review_id}/audit")
+    def review_audit(review_id: UUID, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            item = session.scalar(
+                select(ReviewItem)
+                .join(AnalysisJob, ReviewItem.job_id == AnalysisJob.id)
+                .where(ReviewItem.id == review_id, AnalysisJob.workspace_id == workspace_id)
+            )
+            if item is None:
+                raise APIError("RESOURCE_NOT_FOUND", "review item not found", status_code=404)
+            audits = session.scalars(
+                select(ReviewAudit)
+                .where(ReviewAudit.review_id == review_id)
+                .order_by(ReviewAudit.created_at.asc())
+            ).all()
+            return [
+                {
+                    "audit_id": str(audit.id),
+                    "review_id": str(audit.review_id),
+                    "job_id": str(audit.job_id),
+                    "reviewer_id": audit.reviewer_id,
+                    "decision": audit.decision,
+                    "reason": audit.reason,
+                    "original_observation": audit.original_payload_json,
+                    "revised_observation": audit.revised_payload_json,
+                    "evidence_ids": audit.evidence_ids,
+                    "revision": audit.revision,
+                    "created_at": audit.created_at.isoformat() if audit.created_at else None,
+                }
+                for audit in audits
+            ]
+
+    @app.post("/api/v1/jobs/{job_id}/feedback", response_model=ReviewItemResponse, status_code=201)
+    def create_feedback(job_id: UUID, payload: FeedbackRequest, sc=Depends(scope)):
+        user, workspace_id = sc
+        if not payload.reason.strip():
+            raise APIError("REVIEW_REASON_REQUIRED", "an audit reason is required", status_code=422)
+        with session_factory() as session:
+            job = get_job(session, job_id, workspace_id)
+            evidence_ids = [str(value) for value in payload.evidence_ids]
+            duplicate = session.scalar(
+                select(ReviewAudit.id)
+                .where(
+                    ReviewAudit.job_id == job.id,
+                    ReviewAudit.reviewer_id == str(user["user_id"]),
+                    ReviewAudit.decision == payload.decision,
+                    ReviewAudit.reason == payload.reason.strip(),
+                )
+                .order_by(ReviewAudit.created_at.desc())
+            )
+            if duplicate is not None:
+                raise APIError(
+                    "DUPLICATE_FEEDBACK",
+                    "the same feedback decision has already been recorded",
+                    status_code=409,
+                )
+            if evidence_ids:
+                known = set(
+                    session.scalars(
+                        select(EvidenceItem.evidence_id).where(
+                            EvidenceItem.job_id == job.id,
+                            EvidenceItem.evidence_id.in_(evidence_ids),
+                        )
+                    ).all()
+                )
+                if known != set(evidence_ids):
+                    raise APIError(
+                        "CROSS_JOB_EVIDENCE",
+                        "feedback evidence must belong to the selected job",
+                        status_code=403,
+                    )
+        from packages.persistence.agent_runtime import SqlReviewService
+
+        review_id = SqlReviewService(session_factory).create(
+            job_id=job_id,
+            reason=payload.reason.strip(),
+            risk="MEDIUM",
+            observation={
+                "observation": dict(payload.original_observation),
+                "evidence_ids": evidence_ids,
+                "reason": payload.reason.strip(),
+            },
+        )
+        # A feedback request is an explicit decision event, so persist the
+        # structured audit while retaining ReviewItem's original payload.
+        try:
+            SqlReviewService(session_factory).decide(
+                review_id,
+                reviewer_id=str(user["user_id"]),
+                role="reviewer",
+                decision=payload.decision,
+                note=payload.reason.strip(),
+                revised_observation=payload.revised_observation,
+            )
+        except Exception as exc:
+            raise _map_domain_error(exc) from exc
+        with session_factory() as session, session.begin():
+            item = session.get(ReviewItem, review_id)
+            if item is None:
+                raise APIError("RESOURCE_NOT_FOUND", "review item not found", status_code=404)
+            session.add(
+                ReviewAudit(
+                    id=uuid4(),
+                    review_id=review_id,
+                    job_id=job_id,
+                    reviewer_id=str(user["user_id"]),
+                    decision=payload.decision,
+                    reason=payload.reason.strip(),
+                    original_payload_json=dict(item.original_payload_json or {}),
+                    revised_payload_json=(
+                        dict(payload.revised_observation)
+                        if payload.revised_observation is not None
+                        else None
+                    ),
+                    evidence_ids=evidence_ids,
+                    revision=item.revision,
+                )
+            )
+            session.flush()
+            return _review_response(item)
 
     @app.post("/api/v1/knowledge/documents", status_code=201)
     def create_knowledge_document(payload: KnowledgeDocumentRequest, sc=Depends(scope)):
@@ -728,7 +984,182 @@ def create_app(
                 for doc in docs
             ]
 
-    @app.post("/api/v1/conversations", status_code=201)
+    def _conversation(session: Session, conversation_id: UUID, workspace_id: UUID) -> Conversation:
+        conversation = session.scalar(
+            select(Conversation).where(
+                Conversation.id == conversation_id, Conversation.workspace_id == workspace_id
+            )
+        )
+        if conversation is None:
+            raise APIError("RESOURCE_NOT_FOUND", "conversation not found", status_code=404)
+        return conversation
+
+    def _conversation_boundary(conversation: Conversation, workspace_id: UUID) -> dict[str, Any]:
+        return {
+            "workspace_id": str(workspace_id),
+            "job_id": str(conversation.job_id) if conversation.job_id else None,
+            "conversation_id": str(conversation.id),
+            "allowed_sources": ["evidence_items", "deterministic_results", "published_knowledge"],
+            "limitations": [
+                "仅基于当前工作区与当前任务可见证据回答",
+                "证据不足时不会猜测或补齐结论",
+                "不展示模型私有思维链",
+            ],
+        }
+
+    def _refresh_summary(session: Session, conversation: Conversation) -> None:
+        messages = session.scalars(
+            select(Message)
+            .where(Message.conversation_id == conversation.id)
+            .order_by(Message.created_at.asc(), Message.id.asc())
+        ).all()
+        if not messages:
+            return
+        # Keep a bounded, deterministic summary.  The summary is metadata only;
+        # it is never used to widen the workspace/job authorization boundary.
+        window = messages[-12:]
+        def safe_text(value: str) -> str:
+            # Conversation summaries are metadata, not a media or identity
+            # store.  Remove common file/data/contact references before they are
+            # persisted while retaining enough text for context continuity.
+            value = re.sub(r"data:[^\s]+", "[redacted-data-ref]", value)
+            value = re.sub(r"(?:[A-Za-z]:\\|/)[^\s]+", "[redacted-media-ref]", value)
+            value = re.sub(r"\b[\w.+-]+@[\w.-]+\.\w+\b", "[redacted-contact]", value)
+            value = re.sub(r"(?<!\d)(?:1[3-9]\d{9})(?!\d)", "[redacted-contact]", value)
+            return value[:500]
+
+        lines = [f"{message.role}: {safe_text(message.content)}" for message in window]
+        summary = "\n".join(lines)
+        encoded = summary.encode("utf-8")
+        citation_ids: list[str] = []
+        for message in window:
+            for citation in message.citations or []:
+                if not isinstance(citation, dict):
+                    continue
+                citation_id = citation.get("evidence_id") or citation.get("citation_id")
+                if citation_id is not None and str(citation_id) not in citation_ids:
+                    citation_ids.append(str(citation_id))
+        conversation.summary_version = int(conversation.summary_version or 0) + 1
+        conversation.summary_hash = sha256(encoded).hexdigest()
+        conversation.summary_json = {
+            "text": summary,
+            "message_count": len(messages),
+            "citation_ids": citation_ids,
+            "workspace_id": str(conversation.workspace_id),
+            "job_id": str(conversation.job_id) if conversation.job_id else None,
+            "source_message_start": str(window[0].id),
+            "source_message_end": str(window[-1].id),
+            "version": conversation.summary_version,
+        }
+        conversation.summary_source_start = window[0].id
+        conversation.summary_source_end = window[-1].id
+        conversation.summary_updated_at = datetime.now(timezone.utc)
+
+    def _answer_for_question(
+        session: Session, conversation: Conversation, question: str, workspace_id: UUID
+    ) -> tuple[str, list[dict[str, Any]], bool, str, list[str]]:
+        limitations = [
+            "回答仅使用当前 conversation 绑定任务的 EvidenceItem、确定性结果和已发布知识来源",
+            "回答不代表诊断或对个体学生的评价",
+        ]
+        referenced_jobs = {
+            token.casefold()
+            for token in re.findall(r"job[_-][A-Za-z0-9-]+", question)
+        }
+        current_job = str(conversation.job_id).casefold() if conversation.job_id else None
+        if referenced_jobs and (current_job is None or current_job not in referenced_jobs):
+            return (
+                "请求超出当前会话边界，无法访问或比较其他任务。请在对应任务的会话中提问。",
+                [],
+                False,
+                "unavailable_fallback",
+                limitations + ["检测到跨任务请求"],
+            )
+        if re.search(r"诊断|处分|排名|绩效|预测个人", question):
+            return (
+                "该请求超出产品能力边界，系统只提供群体级、可观察且有证据支持的课堂事实。",
+                [],
+                False,
+                "unavailable_fallback",
+                limitations + ["不支持个体诊断、排名、处分或绩效推断"],
+            )
+        evidence = []
+        if conversation.job_id is not None:
+            evidence = session.scalars(
+                select(EvidenceItem)
+                .where(EvidenceItem.job_id == conversation.job_id)
+                .order_by(EvidenceItem.created_at.asc())
+            ).all()
+        if evidence:
+            citations = [
+                {
+                    "evidence_id": item.evidence_id,
+                    "source_ref": item.source_ref,
+                    "fact": item.fact,
+                    "limitations": item.limitations or [],
+                }
+                for item in evidence[:5]
+            ]
+            # Deterministic/mock adapter: no external model is invoked and the
+            # answer explicitly identifies that provenance for the caller.
+            facts = "；".join(item.fact for item in evidence[:3])
+            answer = (
+                f"基于当前任务的可用证据，相关观察包括：{facts}。"
+                "这些观察仅描述可见事实，不能据此推断未提供的结果。"
+            )
+            return answer, citations, True, "deterministic/mock", limitations
+
+        # A conversation may also use workspace-scoped knowledge, but only
+        # chunks from an explicitly authorized and published document qualify.
+        knowledge_rows = session.execute(
+            select(KnowledgeChunk, KnowledgeDocument)
+            .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
+            .where(
+                KnowledgeDocument.workspace_id == workspace_id,
+                KnowledgeDocument.status == "PUBLISHED",
+                KnowledgeDocument.authorization_status == "AUTHORIZED",
+            )
+            .order_by(KnowledgeChunk.created_at.asc())
+        ).all()
+        if knowledge_rows:
+            citations = [
+                {
+                    "citation_id": chunk.chunk_id,
+                    "source_ref": document.source,
+                    "document_id": str(document.id),
+                    "chunk_id": chunk.chunk_id,
+                    "page": chunk.page,
+                    "version": document.version,
+                    "fact": chunk.content,
+                    "limitations": ["知识来源仅用于补充背景，不替代当前任务证据"],
+                }
+                for chunk, document in knowledge_rows[:5]
+            ]
+            facts = "；".join(str(item[0].content) for item in knowledge_rows[:3])
+            answer = (
+                "当前任务没有 EvidenceItem；以下仅依据当前工作区已授权、已发布的知识来源："
+                f"{facts}。该回答不能推断本任务未提供的观察。"
+            )
+            return (
+                answer,
+                citations,
+                True,
+                "deterministic/mock",
+                limitations + ["回答使用授权知识来源"],
+            )
+
+        return (
+            (
+                "证据不足，无法判断。当前任务没有可用于回答该问题的 EvidenceItem，"
+                "当前工作区也没有可用的已授权知识来源；请先完成分析或补充经过授权的材料。"
+            ),
+            [],
+            False,
+            "unavailable_fallback",
+            limitations + ["当前任务和工作区没有可用证据或授权知识"],
+        )
+
+    @app.post("/api/v1/conversations", response_model=ConversationResponse, status_code=201)
     def create_conversation(payload: ConversationRequest, sc=Depends(scope)):
         _user, workspace_id = sc
         with session_factory() as session, session.begin():
@@ -739,34 +1170,157 @@ def create_app(
             )
             session.add(conversation)
             session.flush()
-            return {"conversation_id": str(conversation.id), "title": conversation.title}
+            return ConversationResponse(
+                conversation_id=conversation.id,
+                workspace_id=conversation.workspace_id,
+                job_id=conversation.job_id,
+                title=conversation.title,
+                summary_version=0,
+                summary=None,
+                created_at=conversation.created_at,
+                updated_at=conversation.updated_at,
+            )
 
-    @app.post("/api/v1/conversations/{conversation_id}/messages")
+    @app.get("/api/v1/conversations", response_model=list[ConversationResponse])
+    def list_conversations(job_id: UUID | None = None, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            statement = select(Conversation).where(Conversation.workspace_id == workspace_id)
+            if job_id is not None:
+                # Validate the job first so a caller cannot use a foreign job as
+                # a filter oracle.
+                get_job(session, job_id, workspace_id)
+                statement = statement.where(Conversation.job_id == job_id)
+            rows = session.scalars(statement.order_by(Conversation.updated_at.desc())).all()
+            return [
+                ConversationResponse(
+                    conversation_id=row.id,
+                    workspace_id=row.workspace_id,
+                    job_id=row.job_id,
+                    title=row.title,
+                    summary_version=row.summary_version,
+                    summary=row.summary_json,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
+                for row in rows
+            ]
+
+    @app.get("/api/v1/conversations/{conversation_id}", response_model=ConversationResponse)
+    def read_conversation(conversation_id: UUID, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            row = _conversation(session, conversation_id, workspace_id)
+            return ConversationResponse(
+                conversation_id=row.id,
+                workspace_id=row.workspace_id,
+                job_id=row.job_id,
+                title=row.title,
+                summary_version=row.summary_version,
+                summary=row.summary_json,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+
+    @app.get(
+        "/api/v1/conversations/{conversation_id}/messages",
+        response_model=list[MessageResponse],
+    )
+    def list_messages(conversation_id: UUID, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            _conversation(session, conversation_id, workspace_id)
+            messages = session.scalars(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.asc(), Message.id.asc())
+            ).all()
+            return [_message_response(message) for message in messages]
+
+    def _create_answer(
+        conversation_id: UUID, payload: MessageRequest, workspace_id: UUID
+    ) -> AnswerResponse:
+        with session_factory() as session, session.begin():
+            conversation = _conversation(session, conversation_id, workspace_id)
+            boundary = _conversation_boundary(conversation, workspace_id)
+            user_message = Message(
+                id=uuid4(), conversation_id=conversation_id, role="user", content=payload.content,
+                citations=[], evidence_available=False, source="user", limitations=[],
+                boundary_json=boundary, created_at=datetime.now(timezone.utc),
+            )
+            session.add(user_message)
+            session.flush()
+            answer, citations, available, source, limitations = _answer_for_question(
+                session, conversation, payload.content, workspace_id
+            )
+            assistant_message = Message(
+                id=uuid4(), conversation_id=conversation_id, role="assistant", content=answer,
+                citations=citations, evidence_available=available, source=source,
+                limitations=limitations, boundary_json=boundary,
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(assistant_message)
+            session.flush()
+            _refresh_summary(session, conversation)
+            session.flush()
+            return AnswerResponse(
+                conversation_id=conversation.id,
+                user_message=_message_response(user_message),
+                assistant_message=_message_response(assistant_message),
+                answer=answer,
+                citations=citations,
+                evidence_available=available,
+                source=source,
+                limitations=limitations,
+                boundary=BoundaryResponse(**boundary),
+                summary_version=conversation.summary_version,
+            )
+
+    @app.post("/api/v1/conversations/{conversation_id}/messages", response_model=AnswerResponse)
     def create_message(conversation_id: UUID, payload: MessageRequest, sc=Depends(scope)):
         _user, workspace_id = sc
-        with session_factory() as session, session.begin():
-            conversation = session.scalar(
-                select(Conversation).where(
-                    Conversation.id == conversation_id, Conversation.workspace_id == workspace_id
-                )
+        return _create_answer(conversation_id, payload, workspace_id)
+
+    @app.post("/api/v1/conversations/{conversation_id}/ask", response_model=AnswerResponse)
+    def ask_conversation(conversation_id: UUID, payload: MessageRequest, sc=Depends(scope)):
+        _user, workspace_id = sc
+        return _create_answer(conversation_id, payload, workspace_id)
+
+    @app.get(
+        "/api/v1/conversations/{conversation_id}/summary",
+        response_model=ConversationSummaryResponse,
+    )
+    def read_summary(conversation_id: UUID, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session:
+            conversation = _conversation(session, conversation_id, workspace_id)
+            if not conversation.summary_json or conversation.summary_updated_at is None:
+                _refresh_summary(session, conversation)
+                session.commit()
+                session.refresh(conversation)
+            if not conversation.summary_json or conversation.summary_updated_at is None:
+                summary = "暂无会话摘要。"
+                updated = datetime.now(timezone.utc)
+                digest = sha256(summary.encode("utf-8")).hexdigest()
+                version = 0
+                start = end = None
+            else:
+                summary = str(conversation.summary_json.get("text", ""))
+                updated = conversation.summary_updated_at
+                digest = conversation.summary_hash or sha256(summary.encode("utf-8")).hexdigest()
+                version = conversation.summary_version
+                start = conversation.summary_source_start
+                end = conversation.summary_source_end
+            return ConversationSummaryResponse(
+                conversation_id=conversation.id,
+                version=version,
+                summary=summary,
+                summary_hash=digest,
+                updated_at=updated,
+                source_message_start=start,
+                source_message_end=end,
+                boundary=BoundaryResponse(**_conversation_boundary(conversation, workspace_id)),
             )
-            if conversation is None:
-                raise APIError("RESOURCE_NOT_FOUND", "conversation not found", status_code=404)
-            message = Message(
-                id=uuid4(),
-                conversation_id=conversation_id,
-                role="user",
-                content=payload.content,
-                citations=[],
-            )
-            session.add(message)
-            session.flush()
-            return {
-                "message_id": str(message.id),
-                "role": message.role,
-                "content": message.content,
-                "citations": [],
-            }
 
     return app
 
@@ -775,6 +1329,14 @@ def _map_domain_error(exc: Exception) -> APIError:
     code = getattr(exc, "error_code", None) or getattr(exc, "code", None)
     if isinstance(exc, ResourceNotFound) or getattr(exc, "status_code", None) == 404:
         return APIError(code or "RESOURCE_NOT_FOUND", str(exc), status_code=404)
+    if isinstance(exc, ReviewError):
+        if "already" in str(exc).casefold():
+            return APIError(
+                "REVIEW_ALREADY_DECIDED",
+                "review item already has a decision",
+                status_code=409,
+            )
+        return APIError(code or "REVIEW_ERROR", str(exc), status_code=422)
     if isinstance(exc, (StorageValidationError, ValidationError)):
         return APIError(code or "INVALID_REQUEST", str(exc), status_code=422)
     if isinstance(exc, IntegrityError):

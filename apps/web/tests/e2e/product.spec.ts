@@ -24,3 +24,21 @@ test('review workspace has an accessible decision form', async ({ page }) => {
   await expect(page.getByLabel('审核理由')).toBeEditable()
   await expect(page.getByRole('button', { name: /确认并继续/ })).toBeVisible()
 })
+
+test('report Q&A persists messages, renders citations, and explains missing evidence', async ({ page }) => {
+  await page.goto('/results')
+  const input = page.getByLabel('向报告提问')
+  await input.fill('当前报告有哪些可核查观察？')
+  await page.getByRole('button', { name: '发送' }).click()
+  await expect(page.getByText('EV-042').first()).toBeVisible()
+  await expect(page.getByText('来源：deterministic/mock')).toBeVisible()
+  await page.getByRole('button', { name: /EV-042/ }).first().click()
+  await expect(page.getByRole('heading', { name: '证据浏览器' })).toBeVisible()
+  await page.goto('/results')
+  await expect(page.getByLabel('向报告提问')).toBeVisible()
+
+  await page.getByLabel('向报告提问').fill('没有证据时可以猜测吗？')
+  await page.getByRole('button', { name: '发送' }).click()
+  await expect(page.getByText('未找到足够证据')).toBeVisible()
+  await expect(page.getByText('来源：unavailable_fallback')).toBeVisible()
+})

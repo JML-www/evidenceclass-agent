@@ -1,4 +1,4 @@
-import type { AgentStep, Evidence, Job } from '../types'
+import type { AgentStep, Citation, Evidence, Job } from '../types'
 
 export const mockJobs: Job[] = [
   { id: 'job_8f21', title: '高一数学 · 函数单调性', mode: 'VIDEO', status: 'NEEDS_REVIEW', progress: 82, createdAt: '今天 09:42', duration: '18:32', evidenceCount: 14 },
@@ -22,3 +22,10 @@ export const mockEvidence: Evidence[] = [
   { id: 'EV-041', time: '00:03:52', source: 'camera-a.mp4 · frame_116', tag: '互动', region: '中间区域', review: '已确认', observation: '教师与学生发生举手互动', deterministic: '检测到手臂抬起并保持 3 秒', explanation: '支持“课堂互动密度上升”的报告结论', confidence: 0.88 },
   { id: 'EV-039', time: '00:02:16', source: 'audio · asr_034', tag: '讲授', region: '全班', review: '未知', observation: '“请大家先独立思考这道题”', deterministic: 'ASR 时间戳 00:02:16–00:02:20', explanation: '仅作为语境，不单独推断学习效果', confidence: 0.97 }
 ]
+
+/** Citation fixtures shared by the offline report-Q&A adapter and demos. */
+export const mockAnswerCitations: Citation[] = mockEvidence.slice(0, 2).map(item => ({
+  evidence_id: item.id,
+  source_ref: item.source,
+  fact: item.observation,
+}))
