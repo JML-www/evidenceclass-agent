@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -9,15 +10,29 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from packages.agent_runtime import AgentGraph, AgentState, CapabilitySnapshot, RetryBudget
+from packages.evidence_engine import EvidenceEngineService
+from packages.evidence_engine.renderers import (
+    render_actions_csv,
+    render_evidence_csv,
+    render_html,
+    render_json,
+    render_markdown,
+)
+from packages.object_storage import ObjectStorageService
 from packages.persistence.agent_runtime import SqlCheckpointStore, SqlReviewService
 from packages.persistence.events import JobEventService
-from packages.persistence.models import AgentRun, AnalysisJob, MediaAsset
+from packages.persistence.models import AgentRun, AnalysisJob, EvidenceItem, MediaAsset
 
 
 class RuntimeWorker:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        storage: ObjectStorageService | None = None,
+    ) -> None:
         self._sessions = session_factory
         self._events = JobEventService(session_factory)
+        self._storage = storage
 
     def run(self, run_id: UUID | str) -> dict[str, Any]:
         run_uuid = UUID(str(run_id))
@@ -39,9 +54,108 @@ class RuntimeWorker:
             graph = AgentGraph(checkpoints=SqlCheckpointStore(self._sessions))
             result = graph.run(state, context=context)
             self._record_trace(job_id, run_uuid, result)
+            if result.final_status == "SUCCEEDED":
+                self._publish_structured_result(job_id, run_uuid, mode)
             return self._finish(run_uuid, result)
         except Exception as exc:  # noqa: BLE001 - worker must persist a stable failure
             return self._fail(run_uuid, type(exc).__name__, str(exc))
+
+    def resume(self, run_id: UUID | str, decision: str) -> dict[str, Any]:
+        """Continue from the latest successful checkpoint after human review."""
+
+        run_uuid = UUID(str(run_id))
+        with self._sessions() as session:
+            run = session.get(AgentRun, run_uuid)
+            if run is None:
+                return {"run_id": str(run_uuid), "status": "MISSING"}
+            job = session.get(AnalysisJob, run.job_id)
+            if job is None:
+                return {"run_id": str(run_uuid), "status": "MISSING_JOB"}
+            if run.status != "EXECUTING" or job.status != "RUNNING":
+                return {"run_id": str(run_uuid), "status": "SKIPPED"}
+            job_id = job.id
+        self._events.append(
+            job_id=job_id,
+            run_id=run_uuid,
+            event_type="agent.run.resumed",
+            stage="human_review",
+            progress=82,
+            message="Agent run resumed after human review",
+            payload={"decision": decision},
+        )
+        try:
+            checkpoints = SqlCheckpointStore(self._sessions)
+            state = checkpoints.restore(str(run_uuid))
+            graph = AgentGraph(checkpoints=checkpoints)
+            result = graph.run(
+                state,
+                context={"review_decision": decision, "resume_node": "compute_metrics"},
+                resume=True,
+            )
+            self._record_trace(job_id, run_uuid, result)
+            return self._finish(run_uuid, result)
+        except Exception as exc:  # noqa: BLE001 - persist a stable worker failure
+            return self._fail(run_uuid, type(exc).__name__, str(exc))
+
+    def _publish_structured_result(self, job_id: UUID, run_id: UUID, mode: str) -> None:
+        if mode != "structured" or self._storage is None:
+            return
+        with self._sessions() as session:
+            job = session.get(AnalysisJob, job_id)
+            asset = session.scalar(
+                select(MediaAsset)
+                .where(MediaAsset.job_id == job_id, MediaAsset.role == "source")
+                .order_by(MediaAsset.created_at.asc())
+                .limit(1)
+            )
+            if job is None or asset is None:
+                raise ValueError("structured analysis requires one uploaded source asset")
+            workspace_id = job.workspace_id
+            asset_id = asset.id
+        raw = self._storage.read_asset(workspace_id=workspace_id, asset_id=asset_id)
+        payload = json.loads(raw.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("structured analysis input must be a JSON object")
+        result = EvidenceEngineService().analyze_payload(payload)
+        contents = {
+            "dashboard": ("text/html", render_html(result).encode("utf-8")),
+            "report": ("text/markdown", render_markdown(result).encode("utf-8")),
+            "evidence": ("text/csv", render_evidence_csv(result).encode("utf-8")),
+            "actions": ("text/csv", render_actions_csv(result).encode("utf-8")),
+            "analysis_result": ("application/json", render_json(result).encode("utf-8")),
+        }
+        self._storage.publish_artifacts(
+            workspace_id=workspace_id,
+            job_id=job_id,
+            version=f"run-{run_id}",
+            contents=contents,
+        )
+        with self._sessions() as session, session.begin():
+            existing = set(
+                session.scalars(
+                    select(EvidenceItem.evidence_id).where(EvidenceItem.job_id == job_id)
+                ).all()
+            )
+            for item in result["evidence"]:
+                if item["evidence_id"] not in existing:
+                    session.add(
+                        EvidenceItem(
+                            job_id=job_id,
+                            evidence_id=item["evidence_id"],
+                            source_ref=item["source_ref"],
+                            fact=item["fact"],
+                            limitations=item.get("limitations", []),
+                        )
+                    )
+        self._events.append(
+            job_id=job_id,
+            run_id=run_id,
+            event_type="job.artifacts.published",
+            stage="publish_report",
+            progress=98,
+            message="Deterministic evidence and five report artifacts published",
+            payload={"artifact_kinds": sorted(contents)},
+        )
 
     def _claim(self, run_id: UUID) -> tuple[UUID, str, str, dict[str, Any]] | None:
         with self._sessions() as session, session.begin():

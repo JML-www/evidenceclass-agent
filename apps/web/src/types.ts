@@ -73,3 +73,18 @@ export type Answer = {
   boundary: Record<string, unknown>
   summary_version: number
 }
+
+export type ReviewItem = {
+  review_id: string
+  job_id: string
+  status: string
+  decision?: string | null
+  reason: string
+  reviewer_id?: string | null
+  revision: number
+  original_observation: Record<string, unknown>
+  revised_observation?: Record<string, unknown> | null
+  evidence_ids: string[]
+  created_at?: string
+  decided_at?: string | null
+}

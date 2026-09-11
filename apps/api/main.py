@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
@@ -19,10 +20,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from apps.api.auth import TokenService, verify_password
+from apps.api.auth import TokenService, hash_password, verify_password
 from apps.api.config import AppSettings
 from apps.api.schemas import (
     AnswerResponse,
+    ArtifactResponse,
     AssetResponse,
     BoundaryResponse,
     ConversationRequest,
@@ -36,6 +38,7 @@ from apps.api.schemas import (
     LoginResponse,
     MessageRequest,
     MessageResponse,
+    RegisterRequest,
     ReviewDecisionRequest,
     ReviewItemResponse,
     ReviewStatsResponse,
@@ -47,6 +50,7 @@ from apps.api.schemas import (
 from apps.worker.queue import CeleryTaskQueue, InProcessTaskQueue
 from apps.worker.runtime import RuntimeWorker
 from packages.agent_runtime.review import ReviewError
+from packages.agent_runtime.state_machines import ReviewDecision
 from packages.object_storage.service import (
     ObjectStorageService,
     StorageValidationError,
@@ -112,9 +116,12 @@ def _error_payload(request_id: str, error: APIError) -> dict[str, Any]:
 
 
 def _job_response(job: AnalysisJob) -> JobResponse:
+    metadata = job.request_json.get("metadata", {}) if isinstance(job.request_json, dict) else {}
+    title = metadata.get("title") if isinstance(metadata, dict) else None
     return JobResponse(
         job_id=job.id,
         workspace_id=job.workspace_id,
+        title=str(title or job.request_json.get("goal") or f"分析任务 · {str(job.id)[:8]}"),
         mode=job.mode,
         status=job.status,
         progress=job.progress,
@@ -233,7 +240,7 @@ def create_app(
     lifecycle = JobLifecycleService(session_factory)
     events = JobEventService(session_factory)
     outbox = OutboxPublisher(session_factory)
-    worker = RuntimeWorker(session_factory)
+    worker = RuntimeWorker(session_factory, storage)
     if task_queue is not None:
         queue = task_queue
     elif settings.worker_mode == "celery":
@@ -242,6 +249,20 @@ def create_app(
         queue = InProcessTaskQueue(worker, auto_run=settings.worker_mode != "manual")
     tokens = TokenService(settings.auth_secret)
     app = FastAPI(title="EvidenceClass Agent API", version="0.2.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Idempotency-Key",
+            "Last-Event-ID",
+            "X-Workspace-ID",
+        ],
+        expose_headers=["X-Request-ID"],
+    )
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.lifecycle = lifecycle
@@ -338,10 +359,13 @@ def create_app(
     def publish_outbox(target_run_id: UUID) -> str | None:
         task_ids: dict[UUID, str] = {}
 
-        def send(topic: str, aggregate_id: UUID, _payload: dict[str, Any]) -> None:
-            if topic != "agent.run.requested":
+        def send(topic: str, aggregate_id: UUID, payload: dict[str, Any]) -> None:
+            if topic == "agent.run.requested":
+                task_id = queue.enqueue(aggregate_id)
+            elif topic == "agent.run.resume_requested":
+                task_id = queue.enqueue_resume(aggregate_id, str(payload["decision"]))
+            else:
                 raise ValueError(f"unsupported outbox topic: {topic}")
-            task_id = queue.enqueue(aggregate_id)
             with session_factory() as session, session.begin():
                 run = session.get(AgentRun, aggregate_id)
                 if run is not None:
@@ -394,6 +418,39 @@ def create_app(
             )
             token = tokens.issue(user_id=user.id, workspace_id=workspace)
             return LoginResponse(access_token=token, user_id=user.id, workspace_id=workspace)
+
+    @app.post("/api/v1/auth/register", response_model=LoginResponse, status_code=201)
+    def register(payload: RegisterRequest) -> LoginResponse:
+        email = payload.email.strip().casefold()
+        if "@" not in email:
+            raise APIError("INVALID_EMAIL", "a valid email address is required", status_code=422)
+        try:
+            with session_factory() as session, session.begin():
+                if session.scalar(select(User.id).where(User.email == email)) is not None:
+                    raise APIError(
+                        "EMAIL_ALREADY_REGISTERED",
+                        "email is already registered",
+                        status_code=409,
+                    )
+                user = User(id=uuid4(), email=email, password_hash=hash_password(payload.password))
+                session.add(user)
+                session.flush()
+                workspace = Workspace(
+                    id=uuid4(), name=payload.workspace_name.strip(), owner_id=user.id
+                )
+                session.add(workspace)
+                session.flush()
+                session.add(
+                    WorkspaceMember(
+                        workspace_id=workspace.id, user_id=user.id, role="OWNER"
+                    )
+                )
+                token = tokens.issue(user_id=user.id, workspace_id=workspace.id)
+                return LoginResponse(access_token=token, user_id=user.id, workspace_id=workspace.id)
+        except IntegrityError as exc:
+            raise APIError(
+                "EMAIL_ALREADY_REGISTERED", "email is already registered", status_code=409
+            ) from exc
 
     @app.post("/api/v1/jobs", response_model=JobResponse, status_code=201)
     def create_job(
@@ -598,7 +655,12 @@ def create_app(
             ).all()
         return [
             AssetResponse(
-                asset_id=a.id, role=a.role, mime=a.mime, size_bytes=a.size_bytes, sha256=a.sha256
+                asset_id=a.id,
+                role=a.role,
+                mime=a.mime,
+                size_bytes=a.size_bytes,
+                sha256=a.sha256,
+                download_url=storage.download_url(workspace_id=workspace_id, asset_id=a.id),
             )
             for a in assets
         ]
@@ -671,7 +733,7 @@ def create_app(
                 for item in items
             ]
 
-    @app.get("/api/v1/jobs/{job_id}/artifacts")
+    @app.get("/api/v1/jobs/{job_id}/artifacts", response_model=list[ArtifactResponse])
     def list_artifacts(job_id: UUID, sc=Depends(scope)):
         from packages.persistence.models import Artifact
 
@@ -691,6 +753,9 @@ def create_app(
                     "version": item.version,
                     "size_bytes": item.size_bytes,
                     "sha256": item.sha256,
+                    "download_url": storage.artifact_download_url(
+                        workspace_id=workspace_id, artifact_id=item.id
+                    ),
                 }
                 for item in items
             ]
@@ -780,7 +845,22 @@ def create_app(
                         revision=revision,
                     )
                 )
-        return {"review_id": str(review_id), "status": "DECIDED", "decision": payload.decision}
+        try:
+            resume = lifecycle.resume_after_review(
+                workspace_id=workspace_id,
+                review_id=review_id,
+                decision=ReviewDecision(payload.decision),
+            )
+        except Exception as exc:
+            raise _map_domain_error(exc) from exc
+        task_id = publish_outbox(UUID(resume["run_id"])) if resume and resume["resumed"] else None
+        return {
+            "review_id": str(review_id),
+            "status": "DECIDED",
+            "decision": payload.decision,
+            "resumed": bool(resume and resume["resumed"]),
+            "task_id": task_id,
+        }
 
     @app.get("/api/v1/review-items", response_model=list[ReviewItemResponse])
     def list_review_items(
@@ -1221,6 +1301,13 @@ def create_app(
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             )
+
+    @app.delete("/api/v1/conversations/{conversation_id}", status_code=204)
+    def delete_conversation(conversation_id: UUID, sc=Depends(scope)):
+        _user, workspace_id = sc
+        with session_factory() as session, session.begin():
+            row = _conversation(session, conversation_id, workspace_id)
+            session.delete(row)
 
     @app.get(
         "/api/v1/conversations/{conversation_id}/messages",

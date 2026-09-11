@@ -25,6 +25,12 @@ class InProcessTaskQueue:
             self._futures[task_id] = self._executor.submit(self.worker.run, run_id)
         return task_id
 
+    def enqueue_resume(self, run_id: UUID, decision: str) -> str:
+        task_id = str(uuid4())
+        if self.auto_run:
+            self._futures[task_id] = self._executor.submit(self.worker.resume, run_id, decision)
+        return task_id
+
     def run_now(self, run_id: UUID) -> dict[str, object]:
         return self.worker.run(run_id)
 
@@ -43,6 +49,11 @@ class CeleryTaskQueue:
         from .celery_app import run_agent
 
         return str(run_agent.delay(str(run_id)).id)
+
+    def enqueue_resume(self, run_id: UUID, decision: str) -> str:
+        from .celery_app import resume_agent
+
+        return str(resume_agent.delay(str(run_id), decision).id)
 
     def cancel(self, task_id: str) -> bool:
         from .celery_app import celery_app

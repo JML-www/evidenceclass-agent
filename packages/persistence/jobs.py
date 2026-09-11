@@ -357,6 +357,76 @@ class JobLifecycleService:
                 run.active_slot = None
             return next_state
 
+    def resume_after_review(
+        self,
+        *,
+        workspace_id: UUID,
+        review_id: UUID,
+        decision: ReviewDecision,
+    ) -> dict[str, Any] | None:
+        """Atomically move a waiting run and job after a persisted review decision."""
+
+        with self._sessions() as session, session.begin():
+            item = session.scalar(
+                select(ReviewItem)
+                .join(AnalysisJob, ReviewItem.job_id == AnalysisJob.id)
+                .where(
+                    ReviewItem.id == review_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    ReviewItem.status == "DECIDED",
+                    ReviewItem.decision == decision.value,
+                )
+            )
+            if item is None:
+                raise ResourceNotFound("decided review item not found")
+            job = session.get(AnalysisJob, item.job_id)
+            run = session.scalar(
+                select(AgentRun)
+                .where(AgentRun.job_id == item.job_id)
+                .order_by(AgentRun.updated_at.desc())
+                .limit(1)
+            )
+            if job is None or run is None or job.status != JobState.NEEDS_REVIEW.value:
+                return None
+            if run.status != AgentRunState.WAITING_HUMAN.value:
+                return None
+            if decision in {ReviewDecision.APPROVED, ReviewDecision.MODIFIED}:
+                job.status = transition(
+                    JobState(job.status),
+                    JobEvent.REVIEW_APPROVED,
+                    review_decision=decision,
+                ).value
+                run.status = transition(
+                    AgentRunState(run.status),
+                    AgentRunEvent.RESUME,
+                    review_decision=decision,
+                ).value
+                run.active_slot = "active"
+                session.add(
+                    OutboxEvent(
+                        topic="agent.run.resume_requested",
+                        aggregate_id=run.id,
+                        payload_json={
+                            "job_id": str(job.id),
+                            "run_id": str(run.id),
+                            "decision": decision.value,
+                            "review_id": str(review_id),
+                        },
+                    )
+                )
+                return {"job_id": str(job.id), "run_id": str(run.id), "resumed": True}
+            if decision is ReviewDecision.REJECTED:
+                job.status = transition(JobState(job.status), JobEvent.REVIEW_REJECTED).value
+                job.error_code = "HUMAN_REVIEW_REJECTED"
+                job.error_message = "A reviewer rejected the observation"
+                run.status = transition(
+                    AgentRunState(run.status),
+                    AgentRunEvent.RESUME,
+                    review_decision=decision,
+                ).value
+                run.active_slot = None
+            return {"job_id": str(job.id), "run_id": str(run.id), "resumed": False}
+
     def cancel_job(self, *, workspace_id: UUID, job_id: UUID) -> dict[str, Any]:
         """Mark a job cancelled; late worker completion is intentionally ignored."""
 

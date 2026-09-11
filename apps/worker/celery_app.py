@@ -25,3 +25,13 @@ def run_agent(run_id: str) -> str:
 
     result = build_worker().run(run_id)
     return str(result.get("status", "UNKNOWN"))
+
+
+@celery_app.task(name="evidenceclass.resume_agent")
+def resume_agent(run_id: str, decision: str) -> str:
+    """Resume a persisted human-review checkpoint after an audited decision."""
+
+    from apps.worker.runtime_bootstrap import build_worker
+
+    result = build_worker().resume(run_id, decision)
+    return str(result.get("status", "UNKNOWN"))

@@ -198,6 +198,57 @@ class ObjectStorageService:
                 raise StorageResourceNotFound("asset not found")
             return self._store.presign_get(asset.object_key, expires=expires)
 
+    def read_asset(self, *, workspace_id: UUID, asset_id: UUID) -> bytes:
+        with self._sessions() as session:
+            asset = session.scalar(
+                select(MediaAsset)
+                .join(AnalysisJob, MediaAsset.job_id == AnalysisJob.id)
+                .where(
+                    MediaAsset.id == asset_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if asset is None:
+                raise StorageResourceNotFound("asset not found")
+            return self._store.read(asset.object_key)
+
+    def artifact_download_url(
+        self,
+        *,
+        workspace_id: UUID,
+        artifact_id: UUID,
+        expires: timedelta = timedelta(minutes=10),
+    ) -> str:
+        with self._sessions() as session:
+            artifact = session.scalar(
+                select(Artifact)
+                .join(AnalysisJob, Artifact.job_id == AnalysisJob.id)
+                .where(
+                    Artifact.id == artifact_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if artifact is None:
+                raise StorageResourceNotFound("artifact not found")
+            return self._store.presign_get(artifact.object_key, expires=expires)
+
+    def read_artifact(self, *, workspace_id: UUID, artifact_id: UUID) -> bytes:
+        with self._sessions() as session:
+            artifact = session.scalar(
+                select(Artifact)
+                .join(AnalysisJob, Artifact.job_id == AnalysisJob.id)
+                .where(
+                    Artifact.id == artifact_id,
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+            )
+            if artifact is None:
+                raise StorageResourceNotFound("artifact not found")
+            return self._store.read(artifact.object_key)
+
     def publish_artifacts(
         self,
         *,

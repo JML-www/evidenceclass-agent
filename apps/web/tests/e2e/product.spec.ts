@@ -42,3 +42,20 @@ test('report Q&A persists messages, renders citations, and explains missing evid
   await expect(page.getByText('未找到足够证据')).toBeVisible()
   await expect(page.getByText('来源：unavailable_fallback')).toBeVisible()
 })
+
+test('task, run, and review actions update the offline state', async ({ page }) => {
+  await page.goto('/jobs')
+  const failedRow = page.locator('tr').filter({ hasText: '初一英语 · 口语互动' })
+  await failedRow.getByRole('button', { name: /打开 .*操作菜单/ }).click()
+  await failedRow.getByRole('button', { name: '重试任务' }).click()
+  await expect(failedRow.getByText('运行中')).toBeVisible()
+
+  await page.goto('/runs/job_8f21')
+  await page.getByRole('button', { name: '取消任务' }).click()
+  await expect(page.getByText('已取消')).toBeVisible()
+
+  await page.goto('/reviews')
+  await page.getByLabel('审核理由').fill('确认该观察与原始帧一致')
+  await page.getByRole('button', { name: /确认并继续/ }).click()
+  await expect(page.getByText('已记录 · APPROVED')).toBeVisible()
+})

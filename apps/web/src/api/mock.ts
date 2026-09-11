@@ -1,4 +1,4 @@
-import type { AgentStep, Citation, Evidence, Job } from '../types'
+import type { AgentStep, Citation, Evidence, Job, ReviewItem } from '../types'
 
 export const mockJobs: Job[] = [
   { id: 'job_8f21', title: '高一数学 · 函数单调性', mode: 'VIDEO', status: 'NEEDS_REVIEW', progress: 82, createdAt: '今天 09:42', duration: '18:32', evidenceCount: 14 },
@@ -29,3 +29,51 @@ export const mockAnswerCitations: Citation[] = mockEvidence.slice(0, 2).map(item
   source_ref: item.source,
   fact: item.observation,
 }))
+
+/** Review records use UUID-shaped ids just like the real API. */
+export const mockReviewItems: ReviewItem[] = [
+  {
+    review_id: '8f6b6b5a-2d65-4e8f-9f5f-000000000042',
+    job_id: 'job_8f21',
+    status: 'PENDING',
+    decision: null,
+    reason: '模型观察需要人工确认',
+    revision: 0,
+    original_observation: {
+      title: '注意力变化',
+      text: '学生抬头看向讲台，持续约 12 秒',
+      time: '00:04:18',
+      score: '中风险',
+      model_value: 'attention = present',
+      confidence: 0.91,
+      source: 'camera-a · frame_129',
+    },
+    revised_observation: null,
+    evidence_ids: ['EV-042'],
+  },
+  {
+    review_id: '8f6b6b5a-2d65-4e8f-9f5f-000000000035',
+    job_id: 'job_8f21',
+    status: 'PENDING',
+    decision: null,
+    reason: '低置信度互动观察',
+    revision: 0,
+    original_observation: {
+      title: '互动中断',
+      text: '小组讨论后出现短暂沉默',
+      time: '00:01:44',
+      score: '低风险',
+      model_value: 'interaction = paused',
+      confidence: 0.76,
+      source: 'camera-a · frame_052',
+    },
+    revised_observation: null,
+    evidence_ids: ['EV-039'],
+  },
+]
+
+export const mockArtifacts = [
+  { artifact_id: 'artifact-report', kind: 'report_markdown', mime: 'text/markdown', version: 'v1', size_bytes: 2480, sha256: 'mock', download_url: 'data:text/markdown;charset=utf-8,%23%20灵眸智课分析报告%0A%0A课堂参与度：78%25%0A%0A报告由证据驱动生成。' },
+  { artifact_id: 'artifact-dashboard', kind: 'dashboard_html', mime: 'text/html', version: 'v1', size_bytes: 5120, sha256: 'mock', download_url: 'data:text/html;charset=utf-8,%3Chtml%3E%3Cbody%3E%3Ch1%3E灵眸智课分析报告%3C%2Fh1%3E%3Cp%3E课堂参与度：78%25%3C%2Fp%3E%3C%2Fbody%3E%3C%2Fhtml%3E' },
+  { artifact_id: 'artifact-evidence', kind: 'evidence_csv', mime: 'text/csv', version: 'v1', size_bytes: 860, sha256: 'mock', download_url: 'data:text/csv;charset=utf-8,evidence_id%2Cfact%0AEV-042%2C学生抬头看向讲台' },
+]

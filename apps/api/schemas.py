@@ -18,6 +18,12 @@ class LoginRequest(StrictSchema):
     password: str = Field(min_length=1, max_length=512)
 
 
+class RegisterRequest(StrictSchema):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=512)
+    workspace_name: str = Field(min_length=1, max_length=160)
+
+
 class LoginResponse(StrictSchema):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
@@ -34,6 +40,7 @@ class CreateJobRequest(StrictSchema):
 class JobResponse(StrictSchema):
     job_id: UUID
     workspace_id: UUID
+    title: str
     mode: str
     status: str
     progress: int
@@ -75,6 +82,16 @@ class AssetResponse(StrictSchema):
     asset_id: UUID
     role: str
     mime: str
+    size_bytes: int
+    sha256: str
+    download_url: str | None = None
+
+
+class ArtifactResponse(StrictSchema):
+    artifact_id: UUID
+    kind: str
+    mime: str
+    version: str
     size_bytes: int
     sha256: str
     download_url: str | None = None

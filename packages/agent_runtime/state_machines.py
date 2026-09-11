@@ -30,6 +30,7 @@ class JobEvent(str, Enum):
     WORKER_STARTED = "WORKER_STARTED"
     REQUIRE_REVIEW = "REQUIRE_REVIEW"
     REVIEW_APPROVED = "REVIEW_APPROVED"
+    REVIEW_REJECTED = "REVIEW_REJECTED"
     SUCCEED = "SUCCEED"
     FAIL = "FAIL"
     CANCEL = "CANCEL"
@@ -90,6 +91,7 @@ JOB_TRANSITIONS: dict[tuple[JobState, JobEvent], JobState] = {
     (JobState.QUEUED, JobEvent.WORKER_STARTED): JobState.RUNNING,
     (JobState.RUNNING, JobEvent.REQUIRE_REVIEW): JobState.NEEDS_REVIEW,
     (JobState.NEEDS_REVIEW, JobEvent.REVIEW_APPROVED): JobState.RUNNING,
+    (JobState.NEEDS_REVIEW, JobEvent.REVIEW_REJECTED): JobState.FAILED,
     (JobState.RUNNING, JobEvent.SUCCEED): JobState.SUCCEEDED,
     (JobState.RUNNING, JobEvent.FAIL): JobState.FAILED,
 }

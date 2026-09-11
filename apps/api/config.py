@@ -20,6 +20,7 @@ class AppSettings:
     minio_secret_key: str = "evidenceclass-secret"
     minio_bucket: str = "evidenceclass"
     minio_secure: bool = False
+    cors_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
 
     @classmethod
     def from_env(cls) -> AppSettings:
@@ -39,4 +40,12 @@ class AppSettings:
             minio_secret_key=os.getenv("MINIO_SECRET_KEY", "evidenceclass-secret"),
             minio_bucket=os.getenv("MINIO_BUCKET", "evidenceclass"),
             minio_secure=os.getenv("MINIO_SECURE", "false").lower() == "true",
+            cors_origins=tuple(
+                item.strip()
+                for item in os.getenv(
+                    "EVIDENCECLASS_CORS_ORIGINS",
+                    "http://127.0.0.1:5173,http://localhost:5173",
+                ).split(",")
+                if item.strip()
+            ),
         )
