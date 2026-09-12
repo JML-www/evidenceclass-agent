@@ -21,6 +21,11 @@ class AppSettings:
     minio_bucket: str = "evidenceclass"
     minio_secure: bool = False
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
+    log_level: str = "INFO"
+    queue_max_queued_per_workspace: int = 8
+    queue_max_total_weight: int = 240
+    queue_max_task_seconds: int = 3_600
+    metrics_enabled: bool = True
 
     @classmethod
     def from_env(cls) -> AppSettings:
@@ -48,4 +53,13 @@ class AppSettings:
                 ).split(",")
                 if item.strip()
             ),
+            log_level=os.getenv("EVIDENCECLASS_LOG_LEVEL", "INFO").upper(),
+            queue_max_queued_per_workspace=max(
+                1, int(os.getenv("EVIDENCECLASS_QUEUE_MAX_QUEUED", "8"))
+            ),
+            queue_max_total_weight=max(1, int(os.getenv("EVIDENCECLASS_QUEUE_MAX_WEIGHT", "240"))),
+            queue_max_task_seconds=max(
+                1, int(os.getenv("EVIDENCECLASS_QUEUE_MAX_TASK_SECONDS", "3600"))
+            ),
+            metrics_enabled=os.getenv("EVIDENCECLASS_METRICS_ENABLED", "1") == "1",
         )

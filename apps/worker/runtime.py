@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -19,9 +20,20 @@ from packages.evidence_engine.renderers import (
     render_markdown,
 )
 from packages.object_storage import ObjectStorageService
+from packages.observability import StageTimeline, bind, emit_event
+from packages.observability import metrics as metrics_registry
 from packages.persistence.agent_runtime import SqlCheckpointStore, SqlReviewService
 from packages.persistence.events import JobEventService
 from packages.persistence.models import AgentRun, AnalysisJob, EvidenceItem, MediaAsset
+
+
+def _elapsed_ms_since(moment: datetime | None) -> float | None:
+    """Milliseconds between a stored timestamp and now; ``None`` if unknown."""
+
+    if moment is None:
+        return None
+    reference = moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - reference).total_seconds() * 1000.0)
 
 
 class RuntimeWorker:
@@ -39,7 +51,12 @@ class RuntimeWorker:
         claimed = self._claim(run_uuid)
         if claimed is None:
             return {"run_id": str(run_uuid), "status": "SKIPPED"}
-        job_id, mode, goal, request = claimed
+        job_id, mode, goal, request, created_at = claimed
+        workspace_id = self._workspace_of(job_id)
+        timeline = StageTimeline()
+        queue_wait_ms = _elapsed_ms_since(created_at)
+        if queue_wait_ms is not None:
+            timeline.record("queue_wait_ms", queue_wait_ms)
         self._events.append(
             job_id=job_id,
             run_id=run_uuid,
@@ -48,17 +65,33 @@ class RuntimeWorker:
             progress=5,
             message="Agent run started",
         )
-        try:
-            state = self._initial_state(run_uuid, job_id, mode, goal)
-            context = self._context(job_id, request)
-            graph = AgentGraph(checkpoints=SqlCheckpointStore(self._sessions))
-            result = graph.run(state, context=context)
-            self._record_trace(job_id, run_uuid, result)
-            if result.final_status == "SUCCEEDED":
-                self._publish_structured_result(job_id, run_uuid, mode)
-            return self._finish(run_uuid, result)
-        except Exception as exc:  # noqa: BLE001 - worker must persist a stable failure
-            return self._fail(run_uuid, type(exc).__name__, str(exc))
+        with bind(
+            request_id=str(run_uuid),
+            workspace_id=str(workspace_id) if workspace_id is not None else None,
+            job_id=str(job_id),
+            run_id=str(run_uuid),
+        ):
+            emit_event("agent.run.started", job_id=str(job_id), mode=mode)
+            metrics_registry().increment(
+                "evidenceclass_agent_runs_total",
+                labels={"outcome": "started"},
+                help="Agent runs grouped by terminal or started outcome",
+            )
+            try:
+                state = self._initial_state(run_uuid, job_id, mode, goal)
+                context = self._context(job_id, request)
+                graph = AgentGraph(checkpoints=SqlCheckpointStore(self._sessions))
+                result = timeline.measure("agent_overhead_ms", graph.run, state, context=context)
+                self._record_trace(job_id, run_uuid, result)
+                if result.final_status == "SUCCEEDED":
+                    timeline.measure(
+                        "artifact_ms", self._publish_structured_result, job_id, run_uuid, mode
+                    )
+                return self._finish(run_uuid, result, timeline=timeline)
+            except Exception as exc:  # noqa: BLE001 - worker must persist a stable failure
+                return self._fail(
+                    run_uuid, type(exc).__name__, str(exc), timeline=timeline
+                )
 
     def resume(self, run_id: UUID | str, decision: str) -> dict[str, Any]:
         """Continue from the latest successful checkpoint after human review."""
@@ -74,6 +107,8 @@ class RuntimeWorker:
             if run.status != "EXECUTING" or job.status != "RUNNING":
                 return {"run_id": str(run_uuid), "status": "SKIPPED"}
             job_id = job.id
+            workspace_id = job.workspace_id
+        timeline = StageTimeline()
         self._events.append(
             job_id=job_id,
             run_id=run_uuid,
@@ -83,19 +118,33 @@ class RuntimeWorker:
             message="Agent run resumed after human review",
             payload={"decision": decision},
         )
-        try:
-            checkpoints = SqlCheckpointStore(self._sessions)
-            state = checkpoints.restore(str(run_uuid))
-            graph = AgentGraph(checkpoints=checkpoints)
-            result = graph.run(
-                state,
-                context={"review_decision": decision, "resume_node": "compute_metrics"},
-                resume=True,
-            )
-            self._record_trace(job_id, run_uuid, result)
-            return self._finish(run_uuid, result)
-        except Exception as exc:  # noqa: BLE001 - persist a stable worker failure
-            return self._fail(run_uuid, type(exc).__name__, str(exc))
+        with bind(
+            request_id=str(run_uuid),
+            workspace_id=str(workspace_id),
+            job_id=str(job_id),
+            run_id=str(run_uuid),
+        ):
+            emit_event("agent.run.resumed", job_id=str(job_id), decision=decision)
+            try:
+                checkpoints = SqlCheckpointStore(self._sessions)
+                state = checkpoints.restore(str(run_uuid))
+                graph = AgentGraph(checkpoints=checkpoints)
+                result = timeline.measure(
+                    "agent_overhead_ms",
+                    graph.run,
+                    state,
+                    context={"review_decision": decision, "resume_node": "compute_metrics"},
+                    resume=True,
+                )
+                self._record_trace(job_id, run_uuid, result)
+                return self._finish(run_uuid, result, timeline=timeline)
+            except Exception as exc:  # noqa: BLE001 - persist a stable worker failure
+                return self._fail(run_uuid, type(exc).__name__, str(exc), timeline=timeline)
+
+    def _workspace_of(self, job_id: UUID) -> UUID | None:
+        with self._sessions() as session:
+            job = session.get(AnalysisJob, job_id)
+            return job.workspace_id if job is not None else None
 
     def _publish_structured_result(self, job_id: UUID, run_id: UUID, mode: str) -> None:
         if mode != "structured" or self._storage is None:
@@ -157,7 +206,7 @@ class RuntimeWorker:
             payload={"artifact_kinds": sorted(contents)},
         )
 
-    def _claim(self, run_id: UUID) -> tuple[UUID, str, str, dict[str, Any]] | None:
+    def _claim(self, run_id: UUID) -> tuple[UUID, str, str, dict[str, Any], datetime | None] | None:
         with self._sessions() as session, session.begin():
             run = session.scalar(select(AgentRun).where(AgentRun.id == run_id))
             if run is None or run.active_slot != "active":
@@ -179,6 +228,7 @@ class RuntimeWorker:
                 job.mode,
                 str(job.request_json.get("goal", "analyze classroom evidence")),
                 dict(job.request_json),
+                run.created_at,
             )
 
     def _initial_state(self, run_id: UUID, job_id: UUID, mode: str, goal: str) -> AgentState:
@@ -229,7 +279,37 @@ class RuntimeWorker:
                 payload={"trace_index": index},
             )
 
-    def _finish(self, run_id: UUID, state: AgentState) -> dict[str, Any]:
+    def _finalize_observability(self, outcome: str, timeline: StageTimeline | None) -> None:
+        """Publish run metrics and one structured completion event."""
+
+        registry = metrics_registry()
+        labels = {"outcome": outcome.lower()}
+        registry.increment(
+            "evidenceclass_agent_runs_total",
+            labels=labels,
+            help="Agent runs grouped by terminal or started outcome",
+        )
+        stages: dict[str, float] = {}
+        if timeline is not None:
+            stages = timeline.finalize()
+            for name, value in stages.items():
+                registry.observe(
+                    f"evidenceclass_stage_{name.removesuffix('_ms')}_milliseconds",
+                    value,
+                    labels=labels,
+                    help="Per-stage duration of one analysis run",
+                )
+            registry.observe(
+                "evidenceclass_agent_run_milliseconds",
+                stages.get("end_to_end_ms", 0.0),
+                labels=labels,
+                help="End-to-end wall time of one agent run",
+            )
+        emit_event("agent.run.completed", outcome=outcome, stages=sorted(stages))
+
+    def _finish(
+        self, run_id: UUID, state: AgentState, *, timeline: StageTimeline | None = None
+    ) -> dict[str, Any]:
         review_job_id: UUID | None = None
         with self._sessions() as session, session.begin():
             run = session.get(AgentRun, run_id)
@@ -290,9 +370,12 @@ class RuntimeWorker:
                 risk="HIGH",
                 observation={"run_id": str(run_id), "node": state.current_node},
             )
+        self._finalize_observability(job_status, timeline)
         return result
 
-    def _fail(self, run_id: UUID, code: str, message: str) -> dict[str, Any]:
+    def _fail(
+        self, run_id: UUID, code: str, message: str, *, timeline: StageTimeline | None = None
+    ) -> dict[str, Any]:
         with self._sessions() as session, session.begin():
             run = session.get(AgentRun, run_id)
             if run is None:
@@ -316,4 +399,6 @@ class RuntimeWorker:
                 message="Worker failed; see job error fields",
                 payload={"code": code},
             )
+        emit_event("agent.run.failed", code=code)
+        self._finalize_observability("ERRORED", timeline)
         return {"run_id": str(run_id), "status": "ERRORED", "error_code": code}

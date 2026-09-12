@@ -184,6 +184,30 @@ phase-8 API is running. The dependency graph is installed locally; the latest ph
 `npm run build`, and five Playwright E2E cases. These checks exercise the deterministic Mock API by
 default; real API mode still requires the phase-8 service and valid authentication.
 
+## Phase-10 to Phase-12 report QA, evaluation and operations
+
+Phase-10 added the evidence-first report Q&A, conversation summaries and user feedback loop;
+phase-11 added the reproducible AI/RAG/Agent evaluation loop with annotation manual, data card and
+regression gate. Phase-12 makes the system operable and predictable:
+
+```powershell
+.\scripts\accept-stage-12.ps1
+```
+
+- Unified correlation IDs (`request_id`, `workspace_id`, `job_id`, `run_id`, `step_id`,
+  `tool_call_id`, `model_call_id`) are bound in the API middleware, ride Celery task headers and
+  are re-bound in the worker thread, so one failure can be traced to a single model call.
+- Structured JSON logs use stable dotted event names and redact secrets, prompts, transcripts,
+  chain-of-thought, personal data and media paths before serialization.
+- `GET /metrics` exposes Prometheus counters, gauges and histograms; `GET /api/v1/queue/status`
+  exposes the admission window. Ten injected faults are exercised by
+  `evals/run_stage12_faults.py` and published to `docs/incidents/fault-injection-001.md`.
+- Per-workspace admission control rejects overload with a retryable `QUEUE_BACKPRESSURE` (HTTP 429)
+  instead of deepening the queue, and GPU OOM degrades the batch before escalating to review.
+- The offline performance baseline is in `evals/reports/benchmark-v0.12.0.md`. Model-dependent
+  stages are reported as unknown, never as fabricated latency. See `docs/stage-12-acceptance.md`
+  and `docs/observability.md`.
+
 ## Development setup
 
 ```powershell
@@ -209,7 +233,7 @@ On success, the command prints the analysis mode, elapsed time, five artifact pa
 and SHA-256 hashes. Invalid input exits nonzero. The output writer replaces only the five managed
 artifact names and preserves unrelated files in the destination directory.
 
-See `docs/stage-2-acceptance.md` through `docs/stage-8-acceptance.md` for executable acceptance
+See `docs/stage-2-acceptance.md` through `docs/stage-12-acceptance.md` for executable acceptance
 matrices and honest external blockers.
 
 Only synthetic or explicitly authorized fixtures may enter this repository. See

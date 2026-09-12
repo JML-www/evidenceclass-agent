@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 from collections.abc import Generator
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -13,7 +15,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -47,6 +49,7 @@ from apps.api.schemas import (
     UploadInitRequest,
     UploadInitResponse,
 )
+from apps.worker.admission import AdmissionLimits, QueueGuard, estimate_task
 from apps.worker.queue import CeleryTaskQueue, InProcessTaskQueue
 from apps.worker.runtime import RuntimeWorker
 from packages.agent_runtime.review import ReviewError
@@ -57,6 +60,13 @@ from packages.object_storage.service import (
     UploadTicket,
 )
 from packages.object_storage.store import InMemoryObjectStore, MinioObjectStore, ObjectStore
+from packages.observability import (
+    CorrelationContext,
+    bind,
+    configure_logging,
+    emit_event,
+)
+from packages.observability import metrics as metrics_registry
 from packages.persistence import (
     Base,
     JobEventService,
@@ -113,6 +123,32 @@ def _error_payload(request_id: str, error: APIError) -> dict[str, Any]:
         "request_id": request_id,
         "details": error.details,
     }
+
+
+def _job_media_hints(request_payload: Any) -> tuple[int, int]:
+    """Read the media duration and asset count from the request or its metadata.
+
+    ``CreateJobRequest`` is a strict schema, so the front end records heavier
+    media hints under ``metadata``; both locations are accepted here.
+    """
+
+    root = request_payload if isinstance(request_payload, dict) else {}
+    metadata = root.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    sources = (root, metadata)
+
+    def pick(key: str, default: int) -> int:
+        for source in sources:
+            value = source.get(key)
+            if value is None:
+                continue
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+        return default
+
+    return max(0, pick("duration_seconds", 0)), max(1, pick("asset_count", 1))
 
 
 def _job_response(job: AnalysisJob) -> JobResponse:
@@ -248,6 +284,14 @@ def create_app(
     else:
         queue = InProcessTaskQueue(worker, auto_run=settings.worker_mode != "manual")
     tokens = TokenService(settings.auth_secret)
+    guard = QueueGuard(
+        AdmissionLimits(
+            max_queued_per_workspace=settings.queue_max_queued_per_workspace,
+            max_total_weight=settings.queue_max_total_weight,
+            max_task_seconds=settings.queue_max_task_seconds,
+        )
+    )
+    configure_logging(getattr(logging, settings.log_level, logging.INFO))
     app = FastAPI(title="EvidenceClass Agent API", version="0.2.0")
     app.add_middleware(
         CORSMiddleware,
@@ -260,6 +304,7 @@ def create_app(
             "Idempotency-Key",
             "Last-Event-ID",
             "X-Workspace-ID",
+            "X-Request-ID",
         ],
         expose_headers=["X-Request-ID"],
     )
@@ -271,12 +316,47 @@ def create_app(
     app.state.outbox = outbox
     app.state.queue = queue
     app.state.tokens = tokens
+    app.state.guard = guard
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
-        request.state.request_id = request.headers.get("X-Request-ID", str(uuid4()))
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request.state.request_id
+        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        request.state.request_id = request_id
+        scope = CorrelationContext.new(
+            request_id=request_id,
+            workspace_id=request.headers.get("X-Workspace-ID"),
+        )
+        started = time.perf_counter()
+        with bind(scope):
+            response = await call_next(request)
+            latency_ms = (time.perf_counter() - started) * 1000.0
+            response.headers["X-Request-ID"] = request_id
+            response.headers["X-Trace-ID"] = request_id
+            route = getattr(request.scope.get("route"), "path", request.url.path)
+            registry = metrics_registry()
+            registry.increment(
+                "evidenceclass_http_requests_total",
+                labels={
+                    "method": request.method,
+                    "route": route,
+                    "status": str(response.status_code),
+                },
+                help="HTTP requests handled by the control-plane API",
+            )
+            registry.observe(
+                "evidenceclass_http_request_milliseconds",
+                latency_ms,
+                labels={"method": request.method, "route": route},
+                help="Control-plane request latency in milliseconds",
+            )
+            if response.status_code >= 400:
+                emit_event(
+                    "api.request.failed",
+                    level=logging.WARNING,
+                    route=route,
+                    method=request.method,
+                    status_code=response.status_code,
+                )
         return response
 
     @app.exception_handler(APIError)
@@ -375,9 +455,92 @@ def create_app(
         outbox.publish_pending(send)
         return task_ids.get(target_run_id)
 
+    def admit_job(job: AnalysisJob, workspace_id: UUID) -> None:
+        """Reject or delay work when the worker queue is already at its ceiling."""
+
+        request_payload = job.request_json if isinstance(job.request_json, dict) else {}
+        duration_seconds, asset_count = _job_media_hints(request_payload)
+        decision = guard.admit(
+            workspace_id=str(workspace_id),
+            duration_seconds=duration_seconds,
+            mode=job.mode,
+            asset_count=asset_count,
+        )
+        registry = metrics_registry()
+        snapshot = guard.snapshot()
+        registry.set_gauge(
+            "evidenceclass_queue_in_flight",
+            float(snapshot["in_flight"]),
+            help="Admitted but not yet released analysis tasks",
+        )
+        registry.set_gauge(
+            "evidenceclass_queue_weight",
+            float(snapshot["total_weight"]),
+            help="Estimated queue weight currently admitted",
+        )
+        if not decision.admitted:
+            registry.increment(
+                "evidenceclass_queue_rejections_total",
+                labels={"code": decision.code},
+                help="Admission-control rejections by stable error code",
+            )
+            emit_event(
+                "queue.admission.rejected",
+                level=logging.WARNING,
+                code=decision.code,
+                mode=job.mode,
+            )
+            details: dict[str, Any] = dict(decision.details)
+            if decision.retry_after_seconds is not None:
+                details["retry_after_seconds"] = decision.retry_after_seconds
+            raise APIError(
+                decision.code,
+                decision.reason,
+                status_code=429,
+                retryable=True,
+                details=details,
+            )
+
+    def admission_estimate(job: AnalysisJob, workspace_id: UUID) -> dict[str, Any]:
+        request_payload = job.request_json if isinstance(job.request_json, dict) else {}
+        duration_seconds, asset_count = _job_media_hints(request_payload)
+        estimate = estimate_task(
+            workspace_id=str(workspace_id),
+            duration_seconds=duration_seconds,
+            mode=job.mode,
+            asset_count=asset_count,
+        )
+        return estimate.as_dict()
+
     @app.get("/health/live")
     def health_live() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    def prometheus_metrics() -> PlainTextResponse:
+        if not settings.metrics_enabled:
+            raise APIError("METRICS_DISABLED", "metrics are disabled", status_code=404)
+        return PlainTextResponse(
+            metrics_registry().render(), media_type="text/plain; version=0.0.4"
+        )
+
+    @app.get("/api/v1/queue/status")
+    def queue_status(sc=Depends(scope)) -> dict[str, Any]:
+        _user, workspace_id = sc
+        snapshot = dict(guard.snapshot())
+        with session_factory() as session:
+            job = session.scalar(
+                select(AnalysisJob)
+                .where(
+                    AnalysisJob.workspace_id == workspace_id,
+                    AnalysisJob.deleted_at.is_(None),
+                )
+                .order_by(AnalysisJob.created_at.desc())
+                .limit(1)
+            )
+            if job is not None:
+                snapshot["workspace_estimate"] = admission_estimate(job, workspace_id)
+        return snapshot
 
     @app.get("/health/ready")
     def health_ready() -> dict[str, str]:
@@ -496,6 +659,8 @@ def create_app(
         sc=Depends(scope),
     ):
         _user, workspace_id = sc
+        with session_factory() as session:
+            admit_job(get_job(session, job_id, workspace_id), workspace_id)
         try:
             result = lifecycle.start_job(
                 workspace_id=workspace_id,
@@ -538,6 +703,8 @@ def create_app(
         sc=Depends(scope),
     ):
         _user, workspace_id = sc
+        with session_factory() as session:
+            admit_job(get_job(session, job_id, workspace_id), workspace_id)
         try:
             result = lifecycle.retry_job(
                 workspace_id=workspace_id,
@@ -555,6 +722,8 @@ def create_app(
         sc=Depends(scope),
     ):
         _user, workspace_id = sc
+        with session_factory() as session:
+            admit_job(get_job(session, job_id, workspace_id), workspace_id)
         try:
             result = lifecycle.rerun_job(
                 workspace_id=workspace_id,

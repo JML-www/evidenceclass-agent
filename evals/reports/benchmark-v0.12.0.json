@@ -1,0 +1,456 @@
+{
+  "benchmark_version": "0.12.0",
+  "generated_at": "2026-09-12T07:36:15.033497+00:00",
+  "environment": {
+    "python": "3.10.11",
+    "platform": "Windows-10-10.0.22621-SP0",
+    "machine": "",
+    "processor": "unknown",
+    "cpu_count": 32
+  },
+  "models": {
+    "mode": "deterministic offline adapters only",
+    "provider_calls": 0,
+    "note": "Real VLM/ASR/OCR/LLM tracks are skipped without explicit authorization."
+  },
+  "samples": {
+    "repeats_per_scenario": 5,
+    "scenario_count": 4
+  },
+  "limitations": [
+    "Model-dependent stages are reported as null; never as measured accuracy or latency.",
+    "Inputs are synthetic structured observations, not real classroom recordings.",
+    "Wall-clock values include Python interpreter noise on a shared workstation.",
+    "Token counts and cost are zero because no paid provider is invoked.",
+    "tracemalloc peak is an in-process allocation high-water mark, not process RSS."
+  ],
+  "results": [
+    {
+      "scenario": "image-1080p",
+      "label": "Single 1080p observation unit",
+      "notes": "One frame; structured observation JSON only.",
+      "repeats": 5,
+      "stages": {
+        "upload_ms": {
+          "p50": 0.012,
+          "p95": 0.021,
+          "min": 0.009,
+          "max": 0.021
+        },
+        "queue_wait_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "probe_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "frame_extract_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "asr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "ocr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "vlm_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "retrieval_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "agent_overhead_ms": {
+          "p50": 3.874,
+          "p95": 4.582,
+          "min": 3.515,
+          "max": 4.582
+        },
+        "artifact_ms": {
+          "p50": 0.547,
+          "p95": 0.569,
+          "min": 0.535,
+          "max": 0.569
+        },
+        "end_to_end_ms": {
+          "p50": 4.626,
+          "p95": 5.309,
+          "min": 4.192,
+          "max": 5.309
+        },
+        "peak_memory_mb": {
+          "p50": 0.221,
+          "p95": 0.236,
+          "min": 0.2,
+          "max": 0.236
+        },
+        "upload_bytes": {
+          "p50": 992.0,
+          "p95": 992.0,
+          "min": 992.0,
+          "max": 992.0
+        }
+      }
+    },
+    {
+      "scenario": "video-2min",
+      "label": "2-minute 720p recording",
+      "notes": "Single camera, two sampled frames.",
+      "repeats": 5,
+      "stages": {
+        "upload_ms": {
+          "p50": 0.009,
+          "p95": 0.013,
+          "min": 0.008,
+          "max": 0.013
+        },
+        "queue_wait_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "probe_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "frame_extract_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "asr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "ocr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "vlm_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "retrieval_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "agent_overhead_ms": {
+          "p50": 3.535,
+          "p95": 4.033,
+          "min": 3.466,
+          "max": 4.033
+        },
+        "artifact_ms": {
+          "p50": 0.59,
+          "p95": 0.631,
+          "min": 0.551,
+          "max": 0.631
+        },
+        "end_to_end_ms": {
+          "p50": 4.314,
+          "p95": 4.893,
+          "min": 4.258,
+          "max": 4.893
+        },
+        "peak_memory_mb": {
+          "p50": 0.26,
+          "p95": 0.267,
+          "min": 0.245,
+          "max": 0.267
+        },
+        "upload_bytes": {
+          "p50": 1784.0,
+          "p95": 1784.0,
+          "min": 1784.0,
+          "max": 1784.0
+        }
+      }
+    },
+    {
+      "scenario": "video-10min",
+      "label": "10-minute 720p recording",
+      "notes": "Single camera, ten sampled frames.",
+      "repeats": 5,
+      "stages": {
+        "upload_ms": {
+          "p50": 0.012,
+          "p95": 0.016,
+          "min": 0.01,
+          "max": 0.016
+        },
+        "queue_wait_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "probe_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "frame_extract_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "asr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "ocr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "vlm_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "retrieval_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "agent_overhead_ms": {
+          "p50": 4.477,
+          "p95": 5.132,
+          "min": 4.346,
+          "max": 5.132
+        },
+        "artifact_ms": {
+          "p50": 1.275,
+          "p95": 1.752,
+          "min": 1.164,
+          "max": 1.752
+        },
+        "end_to_end_ms": {
+          "p50": 6.145,
+          "p95": 6.951,
+          "min": 5.921,
+          "max": 6.951
+        },
+        "peak_memory_mb": {
+          "p50": 0.302,
+          "p95": 0.304,
+          "min": 0.29,
+          "max": 0.304
+        },
+        "upload_bytes": {
+          "p50": 5421.0,
+          "p95": 5421.0,
+          "min": 5421.0,
+          "max": 5421.0
+        }
+      }
+    },
+    {
+      "scenario": "video-46min-dual",
+      "label": "46-minute dual-camera recording (pressure item)",
+      "notes": "Two cameras; the stress item that drives queue admission control.",
+      "repeats": 5,
+      "stages": {
+        "upload_ms": {
+          "p50": 0.021,
+          "p95": 0.024,
+          "min": 0.02,
+          "max": 0.024
+        },
+        "queue_wait_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "probe_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "frame_extract_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "asr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "ocr_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "vlm_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "retrieval_ms": {
+          "p50": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "agent_overhead_ms": {
+          "p50": 7.725,
+          "p95": 8.081,
+          "min": 7.26,
+          "max": 8.081
+        },
+        "artifact_ms": {
+          "p50": 3.56,
+          "p95": 3.832,
+          "min": 3.375,
+          "max": 3.832
+        },
+        "end_to_end_ms": {
+          "p50": 12.353,
+          "p95": 12.966,
+          "min": 12.228,
+          "max": 12.966
+        },
+        "peak_memory_mb": {
+          "p50": 0.602,
+          "p95": 0.608,
+          "min": 0.596,
+          "max": 0.608
+        },
+        "upload_bytes": {
+          "p50": 21875.0,
+          "p95": 21875.0,
+          "min": 21875.0,
+          "max": 21875.0
+        }
+      }
+    }
+  ],
+  "metrics_snapshot": {
+    "counters": {},
+    "gauges": {},
+    "histograms": {
+      "evidenceclass_benchmark_upload_milliseconds": {
+        "count": 4,
+        "sum": 0.054,
+        "buckets": [
+          5.0,
+          10.0,
+          25.0,
+          50.0,
+          100.0,
+          250.0,
+          500.0,
+          1000.0,
+          2500.0,
+          5000.0,
+          10000.0,
+          30000.0,
+          60000.0
+        ]
+      },
+      "evidenceclass_benchmark_agent_overhead_milliseconds": {
+        "count": 4,
+        "sum": 19.611,
+        "buckets": [
+          5.0,
+          10.0,
+          25.0,
+          50.0,
+          100.0,
+          250.0,
+          500.0,
+          1000.0,
+          2500.0,
+          5000.0,
+          10000.0,
+          30000.0,
+          60000.0
+        ]
+      },
+      "evidenceclass_benchmark_artifact_milliseconds": {
+        "count": 4,
+        "sum": 5.972,
+        "buckets": [
+          5.0,
+          10.0,
+          25.0,
+          50.0,
+          100.0,
+          250.0,
+          500.0,
+          1000.0,
+          2500.0,
+          5000.0,
+          10000.0,
+          30000.0,
+          60000.0
+        ]
+      },
+      "evidenceclass_benchmark_end_to_end_milliseconds": {
+        "count": 4,
+        "sum": 27.438,
+        "buckets": [
+          5.0,
+          10.0,
+          25.0,
+          50.0,
+          100.0,
+          250.0,
+          500.0,
+          1000.0,
+          2500.0,
+          5000.0,
+          10000.0,
+          30000.0,
+          60000.0
+        ]
+      }
+    }
+  },
+  "tracemalloc_peak_mb": 0.608
+}
