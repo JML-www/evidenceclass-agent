@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -20,20 +21,29 @@ from packages.evidence_engine.renderers import (
     render_markdown,
 )
 from packages.object_storage import ObjectStorageService
-from packages.observability import StageTimeline, bind, emit_event
-from packages.observability import metrics as metrics_registry
 from packages.observability import (
+    StageTimeline,
+    bind,
+    emit_event,
     record_media_processing,
     record_model_call,
+    record_review_duration,
     record_tool_call,
     record_tool_retry,
     set_review_backlog,
     set_worker_active,
 )
+from packages.observability import metrics as metrics_registry
 from packages.observability.tracing import TRACER as _tracer
 from packages.persistence.agent_runtime import SqlCheckpointStore, SqlReviewService
 from packages.persistence.events import JobEventService
-from packages.persistence.models import AgentRun, AnalysisJob, EvidenceItem, MediaAsset
+from packages.persistence.models import (
+    AgentRun,
+    AnalysisJob,
+    EvidenceItem,
+    MediaAsset,
+    ReviewItem,
+)
 
 
 def _elapsed_ms_since(moment: datetime | None) -> float | None:
@@ -323,7 +333,6 @@ class RuntimeWorker:
         """
 
         completed = list(state.completed_nodes)
-        stages = timeline.stages()
         if not completed:
             return
         for node in completed:

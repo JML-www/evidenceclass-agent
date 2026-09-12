@@ -111,10 +111,17 @@ INSTRUCTION = (
 )
 
 
-def _evaluate(records: list[dict[str, Any]], total: int, failures: dict[str, int]) -> dict[str, Any]:
+def _evaluate(
+    records: list[dict[str, Any]], total: int, failures: dict[str, int]
+) -> dict[str, Any]:
     scored = [item for item in records if item["status"] == "succeeded"]
-    student_pairs = [(item["predicted"]["visible_student_count"], item["truth"]["visible_student_count"]) for item in scored]
-    hand_pairs = [(item["predicted"]["hand_raised"], item["truth"]["hand_raised"]) for item in scored]
+    student_pairs = [
+        (item["predicted"]["visible_student_count"], item["truth"]["visible_student_count"])
+        for item in scored
+    ]
+    hand_pairs = [
+        (item["predicted"]["hand_raised"], item["truth"]["hand_raised"]) for item in scored
+    ]
     teacher_hits = [
         item["predicted"]["teacher_patrolling"] == item["truth"]["teacher_patrolling"]
         and item["predicted"]["teacher_blackboard_writing"]
@@ -128,7 +135,9 @@ def _evaluate(records: list[dict[str, Any]], total: int, failures: dict[str, int
         "failure_classification": dict(sorted(failures.items())),
         "visible_student_count": _pair_metrics(student_pairs),
         "hand_raised": _pair_metrics(hand_pairs),
-        "teacher_posture_accuracy": (sum(teacher_hits) / len(teacher_hits)) if teacher_hits else None,
+        "teacher_posture_accuracy": (
+            sum(teacher_hits) / len(teacher_hits) if teacher_hits else None
+        ),
         "accuracy_claimed_as_classroom": False,
     }
 
@@ -295,7 +304,8 @@ def main() -> None:
     report = run(model_path=args.model_path, output_dir=args.output.resolve(), count=args.count)
     markdown = args.output.resolve() / "report.md"
     markdown.write_text(render_markdown(report), encoding="utf-8")
-    print(json.dumps({"report": str(markdown), "evaluation": report["evaluation"]}, ensure_ascii=False))
+    payload = {"report": str(markdown), "evaluation": report["evaluation"]}
+    print(json.dumps(payload, ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -163,10 +163,16 @@ def run(*, report_path: Path, fixtures_dir: Path, output_dir: Path) -> dict[str,
     # Secondary signal: how often does each annotator match the generator's own record?
     truth_mode_agreement = {
         "annotator_a": _agreement(
-            [(unit["annotator_a"]["teacher_posture"], unit["generator_truth_mode"]) for unit in units]
+            [
+                (unit["annotator_a"]["teacher_posture"], unit["generator_truth_mode"])
+                for unit in units
+            ]
         ),
         "annotator_b": _agreement(
-            [(unit["annotator_b"]["teacher_posture"], unit["generator_truth_mode"]) for unit in units]
+            [
+                (unit["annotator_b"]["teacher_posture"], unit["generator_truth_mode"])
+                for unit in units
+            ]
         ),
     }
     report_out = {
@@ -221,7 +227,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"> **两个标注器都不是人类。** 这是自动一致性研究，反映的是可复现性与一致性信号，"
         f"不能替代人工标注质量。**人类双标轮次仍未执行**"
-        f"（`human_annotation_outstanding: {str(report['human_annotation_outstanding']).lower()}`）。",
+        f"（`human_annotation_outstanding: "
+        f"{str(report['human_annotation_outstanding']).lower()}`）。",
         "",
         f"- 标注单元数：**{report['units']}**",
         f"- 模型来源报告：`{report['model_source_report']}`",
@@ -291,7 +298,9 @@ def main() -> None:
         default=Path("runs/stage-5/real-vlm-30-fixed/fixtures"),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("evals/reports"))
-    parser.add_argument("--markdown", type=Path, default=Path("docs/evaluation/annotation-report-v1.md"))
+    parser.add_argument(
+        "--markdown", type=Path, default=Path("docs/evaluation/annotation-report-v1.md")
+    )
     args = parser.parse_args()
     report = run(
         report_path=args.report.resolve(),

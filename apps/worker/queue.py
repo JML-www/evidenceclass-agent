@@ -7,7 +7,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, TypeVar
 from uuid import UUID, uuid4
 
-from packages.observability import CorrelationContext, bind, current
+from packages.observability import CorrelationContext, SpanContext, bind, current
 from packages.observability.tracing import tracer
 
 from .runtime import RuntimeWorker
@@ -17,7 +17,7 @@ T = TypeVar("T")
 
 def run_with_correlation(
     context: CorrelationContext | None,
-    trace_context: "SpanContext | None",
+    trace_context: SpanContext | None,
     operation: Callable[..., T],
     *args: Any,
 ) -> T:

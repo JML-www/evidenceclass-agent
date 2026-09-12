@@ -39,8 +39,11 @@ def test_perception_fixture_counts_and_unknown_boundary() -> None:
             "structure": [item for item in records if "expected" in item],
         }
     )
-    assert report["vision"]["trial_count"] == 30
-    assert report["vision"]["unknown_rate_by_label"]["standing"] == pytest.approx(0.1)
+    # The stage-11 perception track was expanded from 30 to 120 vision cases so the
+    # label metrics are stable; three of them (vision-010/020/030) still declare a
+    # ``null`` standing prediction, which is the unknown boundary this test guards.
+    assert report["vision"]["trial_count"] == 120
+    assert report["vision"]["unknown_rate_by_label"]["standing"] == pytest.approx(3 / 120)
     assert report["ocr"]["no_text_false_positive_rate"] == 0
 
 

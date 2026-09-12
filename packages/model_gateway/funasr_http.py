@@ -48,7 +48,9 @@ _LANGUAGE_ALIASES = {
     "ko": "한국어",
 }
 _LANGUAGE_CODES = {value: key for key, value in _LANGUAGE_ALIASES.items()}
-_LANGUAGE_CODES.update({"中文": "zh", "English": "en", "粤语": "yue", "日本語": "ja", "한국어": "ko"})
+_LANGUAGE_CODES.update(
+    {"中文": "zh", "English": "en", "粤语": "yue", "日本語": "ja", "한국어": "ko"}
+)
 
 
 class FunAsrHttpAdapter:

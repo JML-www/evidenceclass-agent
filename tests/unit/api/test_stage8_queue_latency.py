@@ -127,6 +127,18 @@ def test_stage8_queue_returns_within_500ms_with_slow_pipeline(tmp_path, endpoint
             headers={**headers, "Idempotency-Key": "lat-retry"},
         )
     else:
+        # rerun requires a terminal job state and no active run, so drive the
+        # job straight to FAILED without ever starting it (starting would leave
+        # an active run behind and reject the rerun).
+        with sessions() as session:
+            from packages.persistence.models import AnalysisJob
+
+            session.execute(
+                AnalysisJob.__table__.update()
+                .where(AnalysisJob.id == UUID(job_id))
+                .values(status="FAILED")
+            )
+            session.commit()
         resp = client.post(
             f"/api/v1/jobs/{job_id}/rerun",
             headers={**headers, "Idempotency-Key": "lat-rerun"},

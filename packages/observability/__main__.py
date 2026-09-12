@@ -18,7 +18,6 @@ produced by the identical :mod:`packages.observability.tracing` calls used insid
 
 from __future__ import annotations
 
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
@@ -31,7 +30,7 @@ def _simulate_worker(run_id: str) -> None:
     """Stand-in for the real worker body; uses the same tracing calls as runtime.py."""
 
     with tracer.span("worker.run", "worker", attributes={"run_id": run_id}):
-        for index, node in enumerate(("inspect_assets", "observe_media", "verify_claims"))):
+        for node in ("inspect_assets", "observe_media", "verify_claims"):
             tool, model = {
                 "inspect_assets": ("inspect_media", None),
                 "observe_media": ("observe_media", ("deterministic-vlm", "qwen2.5-vl")),

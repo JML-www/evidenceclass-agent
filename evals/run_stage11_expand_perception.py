@@ -93,7 +93,9 @@ def _spec(index: int, rng: random.Random) -> dict[str, int | str]:
     }
 
 
-def generate(existing: list[dict[str, Any]], target: int = TARGET_VISION_CASES) -> list[dict[str, Any]]:
+def generate(
+    existing: list[dict[str, Any]], target: int = TARGET_VISION_CASES
+) -> list[dict[str, Any]]:
     """Return the full vision track: existing records plus generated ones."""
 
     vision = [record for record in existing if "truth" in record]

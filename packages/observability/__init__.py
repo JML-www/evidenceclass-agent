@@ -29,8 +29,8 @@ from .logging import (
 from .metrics import (
     METRIC_MEDIA_PEAK_MEMORY,
     METRIC_MEDIA_REALTIME_FACTOR,
-    METRIC_MODEL_429,
     METRIC_MODEL_5XX,
+    METRIC_MODEL_429,
     METRIC_MODEL_COST,
     METRIC_MODEL_TOKENS,
     METRIC_REVIEW_BACKLOG,
@@ -42,23 +42,23 @@ from .metrics import (
     metrics,
     record_media_processing,
     record_model_call,
+    record_review_duration,
     record_tool_call,
     record_tool_retry,
     set_review_backlog,
     set_worker_active,
 )
-from .metrics import record_review_duration
 from .reliability import ReliabilityVerdict, classify_infrastructure_error
 from .timing import STAGE_NAMES, StageTimeline, peak_memory_mb
 from .tracing import (
     SPAN_KINDS,
+    TRACER,
     JsonlTraceStore,
     Span,
     SpanContext,
     SpanStatus,
-    TraceStore,
-    TRACER,
     Tracer,
+    TraceStore,
     format_traceparent,
     new_span_id,
     new_trace_id,
@@ -73,6 +73,7 @@ __all__ = [
     "STAGE_NAMES",
     "CorrelationContext",
     "JsonFormatter",
+    "JsonlTraceStore",
     "MetricsRegistry",
     "METRIC_MEDIA_PEAK_MEMORY",
     "METRIC_MEDIA_REALTIME_FACTOR",

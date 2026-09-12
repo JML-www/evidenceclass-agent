@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .correlation import CORRELATION_FIELDS, current as current_correlation
+from .correlation import current as current_correlation
 from .logging import BLOCKED_CONTENT_KEYS, SENSITIVE_KEY_PATTERN, redact_value
 
 #: The six span categories that make up one request path.
@@ -162,10 +162,12 @@ def _scan_sensitive(value: Any) -> bool:
     if isinstance(value, Mapping):
         for key, item in value.items():
             name = str(key)
-            if SENSITIVE_KEY_PATTERN.search(name) or name.casefold() in BLOCKED_CONTENT_KEYS:
-                # A surviving raw value defeats redaction; anything else already redacted.
-                if item not in (None, "[redacted]"):
-                    return True
+            sensitive_key = (
+                bool(SENSITIVE_KEY_PATTERN.search(name)) or name.casefold() in BLOCKED_CONTENT_KEYS
+            )
+            # A surviving raw value defeats redaction; anything else already redacted.
+            if sensitive_key and item not in (None, "[redacted]"):
+                return True
             if _scan_sensitive(item):
                 return True
         return False
@@ -288,7 +290,9 @@ class Tracer:
         return {"traceparent": format_traceparent(ctx.trace_id, ctx.span_id, ctx.flags)}
 
     @contextmanager
-    def resume_from_headers(self, headers: Mapping[str, str] | None) -> Iterator[SpanContext | None]:
+    def resume_from_headers(
+        self, headers: Mapping[str, str] | None
+    ) -> Iterator[SpanContext | None]:
         ctx = self._context_from_headers(headers)
         with self.resume_from_context(ctx):
             yield ctx
@@ -443,6 +447,8 @@ def _render_nodes(
 #: Process-wide default tracer used by the API, worker and instrumentation.
 TRACER = Tracer()
 
-
-def tracer() -> Tracer:
-    return TRACER
+#: Lower-case alias for the same object.  Call sites import ``tracer`` and use it
+#: as an object (``tracer.span(...)``); it is deliberately *not* an accessor
+#: function, because ``TRACER`` is already a module-level singleton and an
+#: accessor would silently shadow the object with an unbound function.
+tracer = TRACER

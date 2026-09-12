@@ -172,7 +172,11 @@ def test_sse_closes_after_terminal_event(tmp_path):
         "/api/v1/jobs", headers={**headers, "Idempotency-Key": "t-create"}, json={"mode": "image"}
     ).json()["job_id"]
     app.state.events.append(
-        job_id=UUID(job_id), run_id=None, event_type="agent.run.started", message="start", progress=5
+        job_id=UUID(job_id),
+        run_id=None,
+        event_type="agent.run.started",
+        message="start",
+        progress=5,
     )
 
     _append_later(
