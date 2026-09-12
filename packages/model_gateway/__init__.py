@@ -18,6 +18,7 @@ from .contracts import (
 )
 from .fake import FakeModelGateway, FakeScenario
 from .faster_whisper import FasterWhisperAdapter
+from .funasr_http import FunAsrHttpAdapter
 from .interfaces import (
     AsrModel,
     ChatModel,
@@ -43,6 +44,7 @@ __all__ = [
     "FakeModelGateway",
     "FakeScenario",
     "FasterWhisperAdapter",
+    "FunAsrHttpAdapter",
     "LocalQwen35Adapter",
     "OcrModel",
     "OcrRequest",

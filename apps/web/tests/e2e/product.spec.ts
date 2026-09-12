@@ -52,7 +52,7 @@ test('task, run, and review actions update the offline state', async ({ page }) 
 
   await page.goto('/runs/job_8f21')
   await page.getByRole('button', { name: '取消任务' }).click()
-  await expect(page.getByText('已取消')).toBeVisible()
+  await expect(page.getByText('已取消', { exact: true })).toBeVisible()
 
   await page.goto('/reviews')
   await page.getByLabel('审核理由').fill('确认该观察与原始帧一致')

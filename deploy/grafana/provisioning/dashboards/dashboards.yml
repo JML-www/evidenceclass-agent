@@ -1,0 +1,20 @@
+# Grafana dashboard provisioning.
+#
+# Every *.json dropped into deploy/grafana/dashboards is loaded on startup and kept in
+# sync with the file on disk, so the dashboard is version-controlled rather than
+# hand-edited inside the Grafana UI.
+
+apiVersion: 1
+
+providers:
+  - name: EvidenceClass
+    orgId: 1
+    folder: EvidenceClass
+    folderUid: evidenceclass
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

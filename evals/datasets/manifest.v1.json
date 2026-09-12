@@ -1,16 +1,50 @@
 {
   "dataset_version": "stage-11-evaluation.v1",
   "created_at": "2026-09-09",
+  "updated_at": "2026-09-12",
   "authorization_status": "AUTHORIZED",
   "synthetic": true,
   "private_assets": false,
   "splits": {"dev": 0.7, "test": 0.3},
   "datasets": [
-    {"name": "perception", "path": "evals/datasets/perception.v1.jsonl", "records": 52},
+    {"name": "perception", "path": "evals/datasets/perception.v1.jsonl", "records": 142},
     {"name": "retrieval", "path": "evals/datasets/retrieval.v1.jsonl", "records": 40},
     {"name": "agent", "path": "evals/datasets/agent-cases.v1.jsonl", "records": 50}
   ],
+  "perception_tracks": {
+    "vision_fixture": {
+      "records": 120,
+      "label_schema_version": "observable-classroom-labels.v1",
+      "real_model": false,
+      "generator": "evals/run_stage11_expand_perception.py",
+      "seed": 20260812,
+      "provenance": "self-authored deterministic fixture; the prediction field is a documented synthetic observer error model, NOT a model measurement",
+      "accuracy_claimed": false
+    },
+    "asr": {"records": 4, "provenance": "manually transcribed authorized synthetic speech"},
+    "ocr": {"records": 6, "provenance": "rendered synthetic slide, board, and no-text frames"},
+    "structure": {"records": 12, "provenance": "schema-validity fixtures"},
+    "real_vlm_comparison": {
+      "path": "runs/stage-5/real-vlm-30/report.json",
+      "records": 30,
+      "real_model": true,
+      "generator": "evals/media/run_stage5_vision_eval.py",
+      "provenance": "real local Qwen3.5-0.8B observations against generator-computed ground truth on 30 synthetic diagrams",
+      "accuracy_claimed": true,
+      "scope": "synthetic diagrams only; not classroom accuracy"
+    },
+    "real_asr_comparison": {
+      "path": "runs/stage-5/real-media-funasr/report.json",
+      "records": 4,
+      "real_model": true,
+      "generator": "evals/media/run_real_media_eval.py --asr-backend funasr-http",
+      "provenance": "real local FunASR (Fun-ASR-Nano-2512) transcription against manually written references on authorized synthetic speech",
+      "accuracy_claimed": true,
+      "scope": "synthetic speech only; not classroom accuracy"
+    }
+  },
   "label_schema_version": "observable-classroom-labels.v1",
   "annotation_manual_version": "annotation-manual-v1",
+  "annotation_report_version": "annotation-report-v1",
   "evaluator_version": "stage-11-evaluators.v1"
 }

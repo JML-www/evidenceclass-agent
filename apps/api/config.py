@@ -14,6 +14,7 @@ class AppSettings:
     worker_mode: str = "inline"
     create_schema: bool = True
     sse_max_seconds: int = 30
+    sse_heartbeat_seconds: int = 15
     object_store_backend: str = "memory"
     minio_endpoint: str = "127.0.0.1:9000"
     minio_access_key: str = "evidenceclass"
@@ -39,6 +40,9 @@ class AppSettings:
             worker_mode=os.getenv("EVIDENCECLASS_WORKER_MODE", "inline").lower(),
             create_schema=os.getenv("EVIDENCECLASS_CREATE_SCHEMA", "1") == "1",
             sse_max_seconds=max(1, int(os.getenv("EVIDENCECLASS_SSE_MAX_SECONDS", "30"))),
+            sse_heartbeat_seconds=max(
+                1, int(os.getenv("EVIDENCECLASS_SSE_HEARTBEAT_SECONDS", "15"))
+            ),
             object_store_backend=os.getenv("EVIDENCECLASS_OBJECT_STORE", "memory").lower(),
             minio_endpoint=os.getenv("MINIO_ENDPOINT", "127.0.0.1:9000"),
             minio_access_key=os.getenv("MINIO_ACCESS_KEY", "evidenceclass"),

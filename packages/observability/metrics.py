@@ -244,3 +244,156 @@ METRICS = MetricsRegistry()
 
 def metrics() -> MetricsRegistry:
     return METRICS
+
+
+# ---------------------------------------------------------------------------
+# Stage-12 acceptance gap metrics
+#
+# The tutorial names metrics that the baseline registry did not yet expose.  They
+# are defined here, next to the existing ``evidenceclass_*`` series, and recorded
+# from the worker code paths.  Token/cost/429/5xx counters stay at zero under the
+# offline deterministic adapter (no provider call is made); exposing the counters
+# and recording them in a single place lets a real model gateway increment them
+# without further wiring.
+# ---------------------------------------------------------------------------
+
+METRIC_WORKER_ACTIVE = "evidenceclass_worker_active"
+METRIC_TOOL_CALLS = "evidenceclass_tool_calls_total"
+METRIC_TOOL_RETRIES = "evidenceclass_tool_retries_total"
+METRIC_MODEL_TOKENS = "evidenceclass_model_tokens_total"
+METRIC_MODEL_COST = "evidenceclass_model_cost_total"
+METRIC_MODEL_429 = "evidenceclass_model_rate_limited_total"
+METRIC_MODEL_5XX = "evidenceclass_model_server_errors_total"
+METRIC_MEDIA_REALTIME_FACTOR = "evidenceclass_media_realtime_factor"
+METRIC_MEDIA_PEAK_MEMORY = "evidenceclass_media_peak_memory_mb"
+METRIC_REVIEW_BACKLOG = "evidenceclass_review_backlog"
+METRIC_REVIEW_DURATION = "evidenceclass_review_duration_milliseconds"
+
+
+def set_worker_active(delta: float) -> None:
+    """Adjust the gauge of currently executing worker runs (per process)."""
+
+    METRICS.add_gauge(
+        METRIC_WORKER_ACTIVE,
+        delta,
+        help="Number of worker runs currently executing in this process",
+    )
+
+
+def record_tool_call(tool: str, *, status: str) -> None:
+    """Count one tool invocation, labelled by tool and terminal status."""
+
+    METRICS.increment(
+        METRIC_TOOL_CALLS,
+        labels={"tool": tool, "status": status},
+        help="Tool invocations grouped by tool and outcome",
+    )
+
+
+def record_tool_retry(tool: str) -> None:
+    """Count one tool retry; the retry ratio is retries / calls per tool."""
+
+    METRICS.increment(
+        METRIC_TOOL_RETRIES,
+        labels={"tool": tool},
+        help="Tool retries; divide by evidenceclass_tool_calls_total for the retry rate",
+    )
+
+
+def record_model_call(
+    provider: str,
+    model: str,
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cost: float = 0.0,
+    rate_limited: bool = False,
+    server_error: bool = False,
+) -> None:
+    """Record one model call: token usage, estimated cost, and failure counters."""
+
+    if input_tokens:
+        METRICS.increment(
+            METRIC_MODEL_TOKENS,
+            input_tokens,
+            labels={"provider": provider, "model": model, "kind": "input"},
+            help="Input tokens consumed per provider/model",
+        )
+    if output_tokens:
+        METRICS.increment(
+            METRIC_MODEL_TOKENS,
+            output_tokens,
+            labels={"provider": provider, "model": model, "kind": "output"},
+            help="Output tokens produced per provider/model",
+        )
+    if cost:
+        METRICS.increment(
+            METRIC_MODEL_COST,
+            cost,
+            labels={"provider": provider, "model": model},
+            help="Estimated model cost in currency units per provider/model",
+        )
+    if rate_limited:
+        METRICS.increment(
+            METRIC_MODEL_429,
+            labels={"provider": provider, "model": model},
+            help="Model calls rejected with HTTP 429 (rate limit)",
+        )
+    if server_error:
+        METRICS.increment(
+            METRIC_MODEL_5XX,
+            labels={"provider": provider, "model": model},
+            help="Model calls that returned a 5xx server error",
+        )
+
+
+def record_media_processing(
+    *,
+    media_kind: str,
+    duration_seconds: float,
+    processing_ms: float,
+    peak_memory_mb: float | None = None,
+) -> float | None:
+    """Record media handling: realtime factor and peak resident memory.
+
+    The realtime factor is ``duration / wall_clock`` — ``>1`` means faster than
+    real time.  Returns the computed factor so the caller can log it.
+    """
+
+    factor: float | None = None
+    if duration_seconds > 0 and processing_ms > 0:
+        factor = round(duration_seconds / (processing_ms / 1000.0), 3)
+        METRICS.set_gauge(
+            METRIC_MEDIA_REALTIME_FACTOR,
+            factor,
+            labels={"media_kind": media_kind},
+            help="Media processing speed relative to real time (duration / wall clock)",
+        )
+    if peak_memory_mb is not None:
+        METRICS.set_gauge(
+            METRIC_MEDIA_PEAK_MEMORY,
+            peak_memory_mb,
+            labels={"media_kind": media_kind},
+            help="Peak resident memory observed while processing media, in MiB",
+        )
+    return factor
+
+
+def set_review_backlog(count: int) -> None:
+    """Set the gauge of human-review items awaiting a decision."""
+
+    METRICS.set_gauge(
+        METRIC_REVIEW_BACKLOG,
+        float(count),
+        help="Number of human-review items awaiting a decision",
+    )
+
+
+def record_review_duration(milliseconds: float) -> None:
+    """Record how long a run took to reach the human-review state."""
+
+    METRICS.observe(
+        METRIC_REVIEW_DURATION,
+        milliseconds,
+        help="Wall-clock time from run creation to human-review creation",
+    )

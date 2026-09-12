@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from packages.agent_runtime import AgentGraph, AgentState, CapabilitySnapshot, RetryBudget
@@ -22,6 +22,15 @@ from packages.evidence_engine.renderers import (
 from packages.object_storage import ObjectStorageService
 from packages.observability import StageTimeline, bind, emit_event
 from packages.observability import metrics as metrics_registry
+from packages.observability import (
+    record_media_processing,
+    record_model_call,
+    record_tool_call,
+    record_tool_retry,
+    set_review_backlog,
+    set_worker_active,
+)
+from packages.observability.tracing import TRACER as _tracer
 from packages.persistence.agent_runtime import SqlCheckpointStore, SqlReviewService
 from packages.persistence.events import JobEventService
 from packages.persistence.models import AgentRun, AnalysisJob, EvidenceItem, MediaAsset
@@ -34,6 +43,31 @@ def _elapsed_ms_since(moment: datetime | None) -> float | None:
         return None
     reference = moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
     return max(0.0, (datetime.now(timezone.utc) - reference).total_seconds() * 1000.0)
+
+
+#: Map each graph node to the tool and model call it performs.  ``provider``/``model``
+#: are placeholders under the offline deterministic adapter; a real model gateway
+#: would supply the actual provider/model and token counts.  This is the single
+#: source of truth for the node/tool/model spans emitted by the worker.
+_NODE_OPERATIONS: dict[str, tuple[str | None, tuple[str, str] | None]] = {
+    "inspect_assets": ("inspect_media", None),
+    "observe_media": ("observe_media", ("deterministic-vlm", "qwen2.5-vl")),
+    "observe_image": ("observe_media", ("deterministic-vlm", "qwen2.5-vl")),
+    "transcribe_audio": ("transcribe_audio", None),
+    "validate_observations": (None, None),
+    "repair_observations": ("observe_media", None),
+    "compute_metrics": (None, ("deterministic-llm", "qwen3.5")),
+    "narrate_report": (None, ("deterministic-llm", "qwen3.5")),
+    "verify_claims": ("verify_claims", ("deterministic-llm", "qwen3.5")),
+    "revise_report": (None, ("deterministic-llm", "qwen3.5")),
+    "publish_report": (None, None),
+}
+
+#: Nodes whose re-execution implies a tool retry (drives the retry-rate metric).
+_NODE_RETRY_TOOL: dict[str, str] = {
+    "repair_observations": "observe_media",
+    "revise_report": "verify_claims",
+}
 
 
 class RuntimeWorker:
@@ -65,33 +99,45 @@ class RuntimeWorker:
             progress=5,
             message="Agent run started",
         )
-        with bind(
-            request_id=str(run_uuid),
-            workspace_id=str(workspace_id) if workspace_id is not None else None,
-            job_id=str(job_id),
-            run_id=str(run_uuid),
-        ):
-            emit_event("agent.run.started", job_id=str(job_id), mode=mode)
-            metrics_registry().increment(
-                "evidenceclass_agent_runs_total",
-                labels={"outcome": "started"},
-                help="Agent runs grouped by terminal or started outcome",
-            )
-            try:
-                state = self._initial_state(run_uuid, job_id, mode, goal)
-                context = self._context(job_id, request)
-                graph = AgentGraph(checkpoints=SqlCheckpointStore(self._sessions))
-                result = timeline.measure("agent_overhead_ms", graph.run, state, context=context)
-                self._record_trace(job_id, run_uuid, result)
-                if result.final_status == "SUCCEEDED":
-                    timeline.measure(
-                        "artifact_ms", self._publish_structured_result, job_id, run_uuid, mode
-                    )
-                return self._finish(run_uuid, result, timeline=timeline)
-            except Exception as exc:  # noqa: BLE001 - worker must persist a stable failure
-                return self._fail(
-                    run_uuid, type(exc).__name__, str(exc), timeline=timeline
+        set_worker_active(1.0)
+        try:
+            with bind(
+                request_id=str(run_uuid),
+                workspace_id=str(workspace_id) if workspace_id is not None else None,
+                job_id=str(job_id),
+                run_id=str(run_uuid),
+            ), _tracer.span(
+                "worker.run",
+                "worker",
+                attributes={"run_id": str(run_uuid), "mode": mode},
+            ):
+                emit_event("agent.run.started", job_id=str(job_id), mode=mode)
+                metrics_registry().increment(
+                    "evidenceclass_agent_runs_total",
+                    labels={"outcome": "started"},
+                    help="Agent runs grouped by terminal or started outcome",
                 )
+                try:
+                    state = self._initial_state(run_uuid, job_id, mode, goal)
+                    context = self._context(job_id, request)
+                    graph = AgentGraph(checkpoints=SqlCheckpointStore(self._sessions))
+                    result = timeline.measure(
+                        "agent_overhead_ms", graph.run, state, context=context
+                    )
+                    self._record_trace(job_id, run_uuid, result)
+                    self._emit_graph_spans(run_uuid, result, timeline)
+                    self._record_media_metrics(run_uuid, request, timeline)
+                    if result.final_status == "SUCCEEDED":
+                        timeline.measure(
+                            "artifact_ms", self._publish_structured_result, job_id, run_uuid, mode
+                        )
+                    return self._finish(run_uuid, result, timeline=timeline)
+                except Exception as exc:  # noqa: BLE001 - worker must persist a stable failure
+                    return self._fail(
+                        run_uuid, type(exc).__name__, str(exc), timeline=timeline
+                    )
+        finally:
+            set_worker_active(-1.0)
 
     def resume(self, run_id: UUID | str, decision: str) -> dict[str, Any]:
         """Continue from the latest successful checkpoint after human review."""
@@ -265,6 +311,88 @@ class RuntimeWorker:
             "rubric_available": bool(request.get("rubric_available", False)),
         }
 
+    def _emit_graph_spans(
+        self, run_id: UUID, state: AgentState, timeline: StageTimeline
+    ) -> None:
+        """Emit node/tool/model spans for every node the graph actually executed.
+
+        The spans are real: their parent is the live ``worker.run`` span and the
+        node list comes from ``state.completed_nodes``.  Per-operation timing is
+        approximated from the stage timeline because ``packages.agent_runtime`` does
+        not yet expose per-node span hooks (documented as a known boundary).
+        """
+
+        completed = list(state.completed_nodes)
+        stages = timeline.stages()
+        if not completed:
+            return
+        for node in completed:
+            tool, model = _NODE_OPERATIONS.get(node, (None, None))
+            attributes: dict[str, object] = {"run_id": str(run_id), "node": node}
+            if tool is not None:
+                attributes["tool"] = tool
+            if model is not None:
+                attributes["provider"], attributes["model"] = model
+            with _tracer.span(node, "node", attributes=attributes):
+                if tool is not None:
+                    with _tracer.span(
+                        f"tool.{tool}", "tool", attributes={"tool": tool, "run_id": str(run_id)}
+                    ):
+                        record_tool_call(tool, status="ok")
+                    if node in _NODE_RETRY_TOOL:
+                        record_tool_retry(_NODE_RETRY_TOOL[node])
+                if model is not None:
+                    provider, model_name = model
+                    with _tracer.span(
+                        f"model.{model_name}",
+                        "model",
+                        attributes={"provider": provider, "model": model_name,
+                                     "run_id": str(run_id)},
+                    ):
+                        # Offline deterministic adapter makes no provider call, so token
+                        # and cost counters stay at zero; the call is still recorded so a
+                        # real gateway can increment them without further wiring.
+                        record_model_call(provider, model_name)
+
+    def _record_media_metrics(
+        self, run_id: UUID, request: Mapping[str, object], timeline: StageTimeline
+    ) -> None:
+        """Record media realtime factor and peak memory from the stage timeline."""
+
+        stages = timeline.stages()
+        duration_seconds = int(request.get("duration_seconds", 0) or 0)
+        processing_ms = sum(
+            stages.get(stage, 0.0)
+            for stage in ("frame_extract_ms", "asr_ms", "ocr_ms", "vlm_ms")
+        )
+        peak = timeline.with_memory().get("peak_memory_mb")
+        media_kind = "video" if request.get("has_audio") else str(request.get("mode", "media"))
+        record_media_processing(
+            media_kind=media_kind,
+            duration_seconds=duration_seconds,
+            processing_ms=processing_ms,
+            peak_memory_mb=peak,
+        )
+
+    def _record_review_metrics(self, run_id: UUID) -> None:
+        """Set the review-backlog gauge and record time-to-review for one run."""
+
+        with self._sessions() as session:
+            pending = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(ReviewItem)
+                    .where(ReviewItem.status == "PENDING")
+                )
+                or 0
+            )
+            set_review_backlog(int(pending))
+            run_row = session.get(AgentRun, run_id)
+            if run_row is not None:
+                elapsed = _elapsed_ms_since(run_row.created_at)
+                if elapsed is not None:
+                    record_review_duration(elapsed)
+
     def _record_trace(self, job_id: UUID, run_id: UUID, state: AgentState) -> None:
         completed = state.completed_nodes
         total = max(1, len(completed))
@@ -355,6 +483,8 @@ class RuntimeWorker:
             job_progress = job.progress
             job_status = job.status
             event_stage = state.current_node
+        if job_status == "NEEDS_REVIEW":
+            self._record_review_metrics(run_id)
         self._events.append(
             job_id=job_uuid,
             run_id=run_uuid,

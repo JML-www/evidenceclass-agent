@@ -1,0 +1,18 @@
+# Grafana datasource provisioning.
+#
+# The uid is pinned so the provisioned dashboard JSON can reference it by uid instead
+# of relying on Grafana's generated identifier.
+
+apiVersion: 1
+
+datasources:
+  - name: EvidenceClass Prometheus
+    uid: evidenceclass-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST

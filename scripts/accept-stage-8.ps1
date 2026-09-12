@@ -34,6 +34,21 @@ Invoke-Checked {
     -q
 } "Stage-8 focused tests"
 
+Write-Host "[stage8] transactional outbox ADR"
+$AdrPath = "docs\adr\0001-transactional-outbox.md"
+if (-not (Test-Path -LiteralPath $AdrPath)) {
+    throw "Missing outbox ADR at $AdrPath"
+}
+$AdrText = Get-Content -LiteralPath $AdrPath -Raw
+foreach ($Section in @("## Context", "## Decision", "## Alternatives considered", "## Consequences")) {
+    if ($AdrText -notmatch [regex]::Escape($Section)) {
+        throw "Outbox ADR is missing the '$Section' section"
+    }
+}
+if ($AdrText -notmatch "outbox_events") {
+    throw "Outbox ADR must document the real outbox_events table"
+}
+
 Write-Host "[stage8] dependency consistency"
 Invoke-Checked { & $Python -m pip check } "pip check"
 

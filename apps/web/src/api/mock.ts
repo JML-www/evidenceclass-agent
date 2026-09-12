@@ -72,8 +72,50 @@ export const mockReviewItems: ReviewItem[] = [
   },
 ]
 
+export const mockAnalysisResult = {
+  schemaVersion: 'engine.v0.1',
+  taskId: 'job_8f21',
+  analysisMode: 'video',
+  summary: {
+    metrics: {
+      focus: 81,
+      participation: 78,
+      interaction: 67,
+      teacherGuidance: 72,
+      abnormalRate: 6,
+    },
+    overall: 76,
+    rubricSource: 'weighted_average',
+    normalizedWeights: {},
+  },
+  evidence: [
+    { evidence_id: 'EV-042', observation: '学生抬头看向讲台，持续约 12 秒' },
+    { evidence_id: 'EV-041', observation: '教师与学生发生举手互动' },
+  ],
+  actions: [
+    {
+      actionId: 'a1',
+      metricKey: 'interaction',
+      currentValue: 67,
+      suggestion: '增加小组互评与轮流发言环节，提升互动密度',
+      evidenceIds: ['EV-041'],
+    },
+  ],
+}
+
 export const mockArtifacts = [
-  { artifact_id: 'artifact-report', kind: 'report_markdown', mime: 'text/markdown', version: 'v1', size_bytes: 2480, sha256: 'mock', download_url: 'data:text/markdown;charset=utf-8,%23%20灵眸智课分析报告%0A%0A课堂参与度：78%25%0A%0A报告由证据驱动生成。' },
-  { artifact_id: 'artifact-dashboard', kind: 'dashboard_html', mime: 'text/html', version: 'v1', size_bytes: 5120, sha256: 'mock', download_url: 'data:text/html;charset=utf-8,%3Chtml%3E%3Cbody%3E%3Ch1%3E灵眸智课分析报告%3C%2Fh1%3E%3Cp%3E课堂参与度：78%25%3C%2Fp%3E%3C%2Fbody%3E%3C%2Fhtml%3E' },
+  {
+    artifact_id: 'artifact-analysis',
+    kind: 'analysis_result',
+    mime: 'application/json',
+    version: 'v1',
+    size_bytes: JSON.stringify(mockAnalysisResult).length,
+    sha256: 'mock',
+    download_url: `data:application/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(mockAnalysisResult),
+    )}`,
+  },
+  { artifact_id: 'artifact-report', kind: 'report_markdown', mime: 'text/markdown', version: 'v1', size_bytes: 2480, sha256: 'mock', download_url: 'data:text/markdown;charset=utf-8,%23%20灵眸智课分析报告%0A%0A报告由证据驱动生成，未写入任何固定分数。%0A%0A本报告的每一条结论都应可回溯到证据条目。' },
+  { artifact_id: 'artifact-dashboard', kind: 'dashboard_html', mime: 'text/html', version: 'v1', size_bytes: 5120, sha256: 'mock', download_url: 'data:text/html;charset=utf-8,%3Chtml%3E%3Cbody%3E%3Ch1%3E灵眸智课分析报告%3C%2Fh1%3E%3Cp%3E本报告由证据驱动生成。%3C%2Fp%3E%3C%2Fbody%3E%3C%2Fhtml%3E' },
   { artifact_id: 'artifact-evidence', kind: 'evidence_csv', mime: 'text/csv', version: 'v1', size_bytes: 860, sha256: 'mock', download_url: 'data:text/csv;charset=utf-8,evidence_id%2Cfact%0AEV-042%2C学生抬头看向讲台' },
 ]

@@ -19,6 +19,16 @@ real Celery worker against Redis and PostgreSQL.
   validates ownership, expiry, nonempty size, maximum size, MIME, byte signature, and SHA-256.
 - SSE replays the append-only event log after `Last-Event-ID`, so reconnects do not depend on an
   API-process buffer. Clients de-duplicate by the monotonically increasing event ID.
+- SSE also has a real notification channel: `NotificationBus` (`apps/api/event_bus.py`) lets the
+  producer wake subscribers the moment an event row commits, so the live tail is push rather than
+  poll. The bus contract is deliberately backend-agnostic (`subscribe` / `unsubscribe` / `publish`)
+  so it can be swapped for Redis pub/sub without touching the endpoint. The event log stays the
+  single source of truth; the bus only carries a content-free wake-up token.
+- The start/retry/rerun control plane returns `queued` in under 500 ms even when the execution
+  boundary is deliberately slow, proven with wall-clock timing by
+  `tests/unit/api/test_stage8_queue_latency.py`.
+- The API-to-worker hand-off is a transactional outbox; the decision, its failure modes, and the
+  rejected alternatives are recorded in `docs/adr/0001-transactional-outbox.md`.
 - Cancel, retry, and rerun have distinct semantics. Cancel revokes the task where possible; retry
   reuses the failed run/checkpoint; rerun creates a new run and preserves old runs and artifacts.
 - Run-scoped cleanup terminates registered child processes and removes only that run's temporary
@@ -50,7 +60,14 @@ this test in the infrastructure job.
 - Local acceptance does not prove production throughput or a multi-host broker failure recovery.
 - Celery revoke can stop a claimed task, while individual FFmpeg/model adapters must register any
   child process with the run resource manager to receive forced termination.
-- SSE is implemented as replay plus heartbeat per request; production deployments should add a
-  notification channel to reduce polling latency without changing the event-log contract.
+- The SSE notification bus is in-process. It is correct for one API process and degrades to
+  replay-plus-heartbeat latency when the API is horizontally scaled, because a worker notification
+  only reaches the API process that produced it. A Redis-backed implementation of the same three
+  methods is the documented migration path and is not implemented yet.
+- SSE coverage is at the ASGI/test-client level. A browser-level long-lived SSE session against the
+  authenticated Worker is still not part of the acceptance run.
+- The outbox row can remain in `PUBLISHING` if a publisher dies between claim and send; there is no
+  lease timeout or sweeper yet, so that case is an operator action rather than an automatic
+  recovery.
 - Authentication is a minimal project-owned bearer-token boundary, not SSO, OAuth, account
   recovery, rate limiting, or the complete phase-13 RBAC/privacy program.

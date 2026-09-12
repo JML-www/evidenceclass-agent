@@ -8,6 +8,7 @@ from typing import Any
 from celery import Celery
 
 from packages.observability import CorrelationContext, bind
+from packages.observability.tracing import tracer
 
 celery_app = Celery(
     "evidenceclass_agent",
@@ -35,7 +36,7 @@ def run_agent(self: Any, run_id: str) -> str:
     # A Celery process should construct its own database session factory from env.
     from apps.worker.runtime_bootstrap import build_worker
 
-    with bind(_context_from_request(self)):
+    with bind(_context_from_request(self)), tracer.resume_from_headers(_headers_from_request(self)):
         result = build_worker().run(run_id)
     return str(result.get("status", "UNKNOWN"))
 
@@ -46,6 +47,17 @@ def resume_agent(self: Any, run_id: str, decision: str) -> str:
 
     from apps.worker.runtime_bootstrap import build_worker
 
-    with bind(_context_from_request(self)):
+    with bind(_context_from_request(self)), tracer.resume_from_headers(_headers_from_request(self)):
         result = build_worker().resume(run_id, decision)
     return str(result.get("status", "UNKNOWN"))
+
+
+def _headers_from_request(task: Any) -> dict[str, str] | None:
+    """Pull the ``traceparent`` header the producer attached to the task."""
+    headers = getattr(getattr(task, "request", None), "headers", None)
+    if not headers:
+        return None
+    traceparent = headers.get("traceparent") or headers.get("Traceparent")
+    if not traceparent:
+        return None
+    return {"traceparent": str(traceparent)}

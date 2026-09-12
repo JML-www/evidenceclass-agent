@@ -18,7 +18,7 @@ from packages.media_pipeline.evaluation import (
     evaluate_ocr,
 )
 from packages.media_pipeline.tools import resolve_media_tool
-from packages.model_gateway import FasterWhisperAdapter, RapidOcrAdapter
+from packages.model_gateway import FasterWhisperAdapter, FunAsrHttpAdapter, RapidOcrAdapter
 from packages.model_gateway.contracts import AsrRequest, InvocationContext, OcrRequest
 from packages.model_gateway.raw_responses import DirectoryRawResponseSink
 
@@ -194,15 +194,38 @@ def _build_asr_fixture(root: Path) -> tuple[Path, list[dict[str, Any]]]:
     return five_minutes, windows
 
 
-def _asr_eval(root: Path, model_name: str) -> dict[str, Any]:
-    audio, windows = _build_asr_fixture(root)
+def _build_asr_adapter(
+    root: Path, backend: str, whisper_model: str, funasr_base_url: str
+) -> Any:
     sink = DirectoryRawResponseSink(root / "raw-asr")
-    adapter = FasterWhisperAdapter(
-        model_name_or_path=model_name,
+    if backend == "funasr-http":
+        return FunAsrHttpAdapter(
+            base_url=funasr_base_url,
+            raw_response_sink=sink,
+            hotwords=(
+                "灵眸智课",
+                "EvidenceClass",
+                "证据追踪",
+                "课堂观察",
+                "抽样出现率",
+            ),
+        )
+    return FasterWhisperAdapter(
+        model_name_or_path=whisper_model,
         raw_response_sink=sink,
         device="cpu",
         compute_type="int8",
     )
+
+
+def _asr_eval(
+    root: Path,
+    backend: str = "faster-whisper",
+    whisper_model: str = "",
+    funasr_base_url: str = "http://127.0.0.1:8000",
+) -> dict[str, Any]:
+    audio, windows = _build_asr_fixture(root)
+    adapter = _build_asr_adapter(root, backend, whisper_model, funasr_base_url)
     result = adapter.transcribe(
         AsrRequest(
             audio_ref=str(audio),
@@ -234,6 +257,7 @@ def _asr_eval(root: Path, model_name: str) -> dict[str, Any]:
         )
     evaluation = evaluate_asr(samples, source_duration_seconds=_duration(audio))
     return {
+        "backend": backend,
         "fixture": {
             "authorized": True,
             "synthetic": True,
@@ -348,18 +372,34 @@ def _ocr_eval(root: Path) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--whisper-model", required=True)
+    parser.add_argument(
+        "--asr-backend",
+        choices=("faster-whisper", "funasr-http"),
+        default="faster-whisper",
+    )
+    parser.add_argument("--whisper-model", default="")
+    parser.add_argument("--funasr-base-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--skip-ocr", action="store_true")
     args = parser.parse_args()
+    if args.asr_backend == "faster-whisper" and not args.whisper_model:
+        parser.error("--whisper-model is required when --asr-backend faster-whisper is used")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    report = {
+    asr = _asr_eval(
+        output,
+        backend=args.asr_backend,
+        whisper_model=args.whisper_model,
+        funasr_base_url=args.funasr_base_url,
+    )
+    report: dict[str, Any] = {
         "schema_version": "stage5-real-media-eval.v1",
         "claim_boundary": (
             "Real local ASR/OCR on authorized synthetic fixtures; this is not classroom accuracy."
         ),
-        "asr": _asr_eval(output, args.whisper_model),
-        "ocr": _ocr_eval(output),
+        "asr": asr,
     }
+    if not args.skip_ocr:
+        report["ocr"] = _ocr_eval(output)
     destination = output / "report.json"
     destination.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -368,8 +408,11 @@ def main() -> None:
         json.dumps(
             {
                 "report": str(destination),
+                "asr_backend": args.asr_backend,
                 "asr_cer": report["asr"]["evaluation"]["overall_cer"],
-                "ocr_error_trials": report["ocr"]["evaluation"]["error_trial_ids"],
+                "ocr_error_trials": report.get("ocr", {})
+                .get("evaluation", {})
+                .get("error_trial_ids", "skipped"),
             },
             ensure_ascii=False,
         )

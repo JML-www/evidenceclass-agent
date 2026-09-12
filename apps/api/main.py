@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -24,6 +25,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.auth import TokenService, hash_password, verify_password
 from apps.api.config import AppSettings
+from apps.api.event_bus import (
+    TERMINAL_EVENT_TYPES,
+    NotificationBus,
+    NotifyingJobEventService,
+)
 from apps.api.schemas import (
     AnswerResponse,
     ArtifactResponse,
@@ -69,7 +75,6 @@ from packages.observability import (
 from packages.observability import metrics as metrics_registry
 from packages.persistence import (
     Base,
-    JobEventService,
     OutboxPublisher,
     create_db_engine,
     make_session_factory,
@@ -274,7 +279,10 @@ def create_app(
             store = InMemoryObjectStore()
     storage = ObjectStorageService(store, session_factory)
     lifecycle = JobLifecycleService(session_factory)
-    events = JobEventService(session_factory)
+    # The bus fans out worker-appended events to long-lived SSE connections.
+    # The worker appends through this same service so its events notify the bus.
+    bus = NotificationBus()
+    events = NotifyingJobEventService(session_factory, bus)
     outbox = OutboxPublisher(session_factory)
     worker = RuntimeWorker(session_factory, storage)
     if task_queue is not None:
@@ -283,6 +291,9 @@ def create_app(
         queue = CeleryTaskQueue()
     else:
         queue = InProcessTaskQueue(worker, auto_run=settings.worker_mode != "manual")
+    # Route the durable worker event writes through the notifying service so the
+    # SSE notification channel learns about them without touching packages/worker.
+    worker._events = events
     tokens = TokenService(settings.auth_secret)
     guard = QueueGuard(
         AdmissionLimits(
@@ -317,6 +328,7 @@ def create_app(
     app.state.queue = queue
     app.state.tokens = tokens
     app.state.guard = guard
+    app.state.bus = bus
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -844,15 +856,47 @@ def create_app(
         _user, workspace_id = sc
         with session_factory() as session:
             get_job(session, job_id, workspace_id)
-        rows = events.list_after(job_id=job_id, last_event_id=last_event_id)
+        heartbeat_seconds = max(1, int(getattr(settings, "sse_heartbeat_seconds", 15)))
+        subscriber = bus.subscribe(job_id)
+
+        def frame(row: dict[str, Any]) -> str:
+            data = json.dumps(row, ensure_ascii=False)
+            return f"id: {row['event_id']}\nevent: {row['type']}\ndata: {data}\n\n"
 
         async def stream() -> Generator[str, None, None]:
-            for row in rows:
-                if await request.is_disconnected():
+            try:
+                last_id = last_event_id
+                # Replay everything already persisted after the client's cursor so
+                # a reconnect resumes exactly where Last-Event-ID left off.
+                rows = events.list_after(job_id=job_id, last_event_id=last_id)
+                for row in rows:
+                    if await request.is_disconnected():
+                        return
+                    yield frame(row)
+                    last_id = max(last_id, int(row["event_id"]))
+                # The job may already be terminal when the client (re)connects.
+                if any(row["type"] in TERMINAL_EVENT_TYPES for row in rows):
                     return
-                data = json.dumps(row, ensure_ascii=False)
-                yield f"id: {row['event_id']}\nevent: {row['type']}\ndata: {data}\n\n"
-            yield ": heartbeat\n\n"
+                # Live tail: a bus notification means new rows were committed, so
+                # re-read the durable log and push them. This is push, not poll.
+                while True:
+                    if await request.is_disconnected():
+                        return
+                    try:
+                        await asyncio.wait_for(
+                            subscriber.queue.get(), timeout=heartbeat_seconds
+                        )
+                    except asyncio.TimeoutError:
+                        yield ": heartbeat\n\n"
+                        continue
+                    new_rows = events.list_after(job_id=job_id, last_event_id=last_id)
+                    for row in new_rows:
+                        yield frame(row)
+                        last_id = max(last_id, int(row["event_id"]))
+                    if any(row["type"] in TERMINAL_EVENT_TYPES for row in new_rows):
+                        return
+            finally:
+                bus.unsubscribe(job_id, subscriber)
 
         return StreamingResponse(
             stream(),

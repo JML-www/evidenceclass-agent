@@ -1,0 +1,30 @@
+# Prometheus scrape configuration for the EvidenceClass control plane.
+#
+# The API process runs on the host (not in this compose project), so the target is
+# reached through `host.docker.internal`. On Linux hosts that name is supplied by the
+# `extra_hosts` mapping declared on the `prometheus` service in docker-compose.yml.
+#
+# If you run the API somewhere else, override the target with:
+#   PROMETHEUS_API_TARGET=my-api-host:8000 docker compose up -d prometheus
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: evidenceclass-agent
+
+scrape_configs:
+  - job_name: evidenceclass-api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "host.docker.internal:8000"
+        labels:
+          component: api
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - "localhost:9090"
+        labels:
+          component: prometheus

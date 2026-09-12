@@ -1,0 +1,445 @@
+{
+  "uid": "evidenceclass-observability",
+  "title": "EvidenceClass 可观测性",
+  "tags": ["evidenceclass", "stage-12"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "控制面 API",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP 请求速率（按状态码）",
+      "description": "source: evidenceclass_http_requests_total{method,route,status}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(evidenceclass_http_requests_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP 延迟 p95",
+      "description": "source: evidenceclass_http_request_milliseconds (histogram)",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evidenceclass_http_request_milliseconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evidenceclass_http_request_milliseconds_bucket[5m])))",
+          "legendFormat": "p50"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "HTTP 5xx 占比",
+      "description": "source: evidenceclass_http_requests_total{status=~\"5..\"}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(evidenceclass_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(evidenceclass_http_requests_total[5m])), 1e-9)",
+          "legendFormat": "5xx ratio"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Agent Runs 与阶段耗时",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Agent Run 速率（按结局）",
+      "description": "source: evidenceclass_agent_runs_total{outcome}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(evidenceclass_agent_runs_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "端到端 Run 耗时",
+      "description": "source: evidenceclass_agent_run_milliseconds{outcome}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evidenceclass_agent_run_milliseconds_bucket[10m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (outcome) (rate(evidenceclass_agent_run_milliseconds_sum[10m])) / clamp_min(sum by (outcome) (rate(evidenceclass_agent_run_milliseconds_count[10m])), 1e-9)",
+          "legendFormat": "avg {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "各阶段平均耗时",
+      "description": "source: evidenceclass_stage_<stage>_milliseconds（11 个阶段：upload/queue_wait/probe/frame_extract/asr/ocr/vlm/retrieval/agent_overhead/artifact/end_to_end）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (__name__) (rate(evidenceclass_stage_.*_milliseconds_sum[10m])) / clamp_min(sum by (__name__) (rate(evidenceclass_stage_.*_milliseconds_count[10m])), 1e-9)",
+          "legendFormat": "{{__name__}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "队列保护与 Worker",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "collapsed": false
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "队列在途任务",
+      "description": "source: evidenceclass_queue_in_flight（准入已通过、尚未释放）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [{ "refId": "A", "expr": "evidenceclass_queue_in_flight", "legendFormat": "in flight" }]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "队列已准入总权重",
+      "description": "source: evidenceclass_queue_weight（与 EVIDENCECLASS_QUEUE_MAX_WEIGHT 对比）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [{ "refId": "A", "expr": "evidenceclass_queue_weight", "legendFormat": "weight" }]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "准入拒绝速率（按原因）",
+      "description": "source: evidenceclass_queue_rejections_total{code}，例如 QUEUE_BACKPRESSURE",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (code) (rate(evidenceclass_queue_rejections_total[5m]))",
+          "legendFormat": "{{code}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Worker 活跃 Run 数",
+      "description": "source: evidenceclass_worker_active（本进程并发执行的 run 数）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [{ "refId": "A", "expr": "evidenceclass_worker_active", "legendFormat": "active" }]
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "工具、模型、媒体与复核",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "collapsed": false
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "工具调用速率（按工具与结果）",
+      "description": "source: evidenceclass_tool_calls_total{tool,status}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tool, status) (rate(evidenceclass_tool_calls_total[5m]))",
+          "legendFormat": "{{tool}} / {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "工具重试率",
+      "description": "source: rate(evidenceclass_tool_retries_total) / rate(evidenceclass_tool_calls_total)",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tool) (rate(evidenceclass_tool_retries_total[5m])) / clamp_min(sum by (tool) (rate(evidenceclass_tool_calls_total[5m])), 1e-9)",
+          "legendFormat": "{{tool}}"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "模型 Token 速率",
+      "description": "source: evidenceclass_model_tokens_total{provider,model,kind}（离线确定性适配器下恒为 0）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (provider, model, kind) (rate(evidenceclass_model_tokens_total[10m]))",
+          "legendFormat": "{{provider}}/{{model}} {{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "模型估算费用速率",
+      "description": "source: evidenceclass_model_cost_total（未知单价时不记录，绝不臆造）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (provider, model) (rate(evidenceclass_model_cost_total[10m]))",
+          "legendFormat": "{{provider}}/{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "模型 429 / 5xx",
+      "description": "source: evidenceclass_model_rate_limited_total 与 evidenceclass_model_server_errors_total",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(evidenceclass_model_rate_limited_total[10m]))",
+          "legendFormat": "429"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(evidenceclass_model_server_errors_total[10m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "媒体处理倍速",
+      "description": "source: evidenceclass_media_realtime_factor{media_kind}，大于 1 表示快于实时",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 2 }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "evidenceclass_media_realtime_factor",
+          "legendFormat": "{{media_kind}}"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "媒体处理峰值内存",
+      "description": "source: evidenceclass_media_peak_memory_mb{media_kind}",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "decimals": 1 }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "evidenceclass_media_peak_memory_mb",
+          "legendFormat": "{{media_kind}}"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "复核积压量",
+      "description": "source: evidenceclass_review_backlog（等待人工决定的条目数）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 25 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [{ "refId": "A", "expr": "evidenceclass_review_backlog", "legendFormat": "backlog" }]
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "复核平均处理时长 p95",
+      "description": "source: evidenceclass_review_duration_milliseconds（run 创建到进入人工复核状态）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evidenceclass_review_duration_milliseconds_bucket[10m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "阶段耗时 p95（按阶段）",
+      "description": "source: evidenceclass_stage_<stage>_milliseconds（p95，用于定位长尾阶段）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, __name__) (rate(evidenceclass_stage_.*_milliseconds_bucket[10m])))",
+          "legendFormat": "{{__name__}}"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "故障注入记录",
+      "description": "source: evidenceclass_fault_injections_total（由确定性故障 harness 记录；正常生产运行时恒为 0）",
+      "datasource": { "type": "prometheus", "uid": "evidenceclass-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (fault, recovered) (evidenceclass_fault_injections_total)",
+          "legendFormat": "{{fault}} / recovered={{recovered}}"
+        }
+      ]
+    }
+  ]
+}

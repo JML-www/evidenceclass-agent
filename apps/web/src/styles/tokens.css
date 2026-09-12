@@ -1,17 +1,184 @@
+/* =========================================================================
+ * 设计令牌（Design Tokens）
+ * 全部通过 CSS 变量声明，组件内禁止写魔法值。
+ * 深色优先：默认跟随系统 prefers-color-scheme，[data-theme] 可手动覆盖。
+ * ========================================================================= */
+
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #18233b;
-  background: #f5f7fb;
-  font-synthesis: none;
-  --ink: #18233b;
-  --muted: #7b879f;
-  --line: #e5e9f2;
-  --panel: #fff;
-  --navy: #101b31;
-  --purple: #6756e8;
-  --blue: #3478e5;
-  --green: #168b70;
-  --amber: #ba7a18;
-  --red: #c94b57;
-  --shadow: 0 12px 30px rgba(25, 40, 80, .06);
+  /* ---- 字体 ---- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* ---- 背景三层 elevation ---- */
+  --canvas: #f4f6fb;          /* 页面最底层 */
+  --surface: #ffffff;         /* 卡片 / 面板 */
+  --surface-raised: #ffffff;  /* 浮起元素（popover / tooltip） */
+
+  /* ---- 侧边栏（深色骨架，双主题保持一致观感） ---- */
+  --navy: #0f1a30;
+  --navy-raised: #18233d;
+
+  /* ---- 文本三档 ---- */
+  --text-primary: #18233b;
+  --text-secondary: #5c6883;
+  --text-tertiary: #8b95a8;
+
+  /* ---- 边框两档 ---- */
+  --border: #e5e9f2;
+  --border-strong: #d2d9e7;
+
+  /* ---- 品牌主色 ---- */
+  --brand: #6756e8;
+  --brand-strong: #5645d0;
+  --brand-subtle: #efedff;
+
+  /* ---- 语义色 + -subtle 背景变体 ---- */
+  --success: #168b70;
+  --success-subtle: #e5f8f1;
+  --warning: #b4790f;
+  --warning-subtle: #fff4df;
+  --danger: #cf4756;
+  --danger-subtle: #fdecee;
+  --info: #2f74d0;
+  --info-subtle: #e7f1fd;
+
+  /* ---- 间距刻度（4px 基准） ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* ---- 圆角刻度 ---- */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* ---- 阴影三档 ---- */
+  --shadow-1: 0 1px 2px rgba(25, 40, 80, .05);
+  --shadow-2: 0 6px 18px rgba(25, 40, 80, .07);
+  --shadow-3: 0 16px 40px rgba(25, 40, 80, .10);
+
+  /* ---- 字号阶梯 ---- */
+  --font-xs: 10px;
+  --font-sm: 11px;
+  --font-base: 12px;
+  --font-md: 13px;
+  --font-lg: 15px;
+  --font-xl: 17px;
+  --font-2xl: 22px;
+  --font-3xl: 29px;
+
+  /* ---- 过渡时长（120–220ms，不过浮夸） ---- */
+  --duration-fast: 140ms;
+  --duration-base: 180ms;
+  --duration-slow: 220ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* ---- z-index 层级 ---- */
+  --z-nav: 100;
+  --z-sticky: 200;
+  --z-popover: 400;
+  --z-toast: 900;
+  --z-modal: 1000;
+
+  /* ---- 兼容旧类名（保持现有组件可用） ---- */
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border);
+  --panel: var(--surface);
+  --purple: var(--brand);
+  --blue: var(--info);
+  --green: var(--success);
+  --amber: var(--warning);
+  --red: var(--danger);
+  --shadow: var(--shadow-2);
+}
+
+/* ===== 深色主题：手动覆盖 ===== */
+[data-theme="dark"] {
+  --canvas: #0b1120;
+  --surface: #141d31;
+  --surface-raised: #1b2640;
+  --navy: #0a0f1c;
+  --navy-raised: #131c30;
+
+  --text-primary: #e8edf7;
+  --text-secondary: #9aa6bf;
+  --text-tertiary: #6c7890;
+
+  --border: #243049;
+  --border-strong: #33425d;
+
+  --brand: #8b7bff;
+  --brand-strong: #9d8fff;
+  --brand-subtle: #232347;
+
+  --success: #36c89c;
+  --success-subtle: #11342c;
+  --warning: #e3a63f;
+  --warning-subtle: #382c12;
+  --danger: #f06a78;
+  --danger-subtle: #3a1c20;
+  --info: #5b9bff;
+  --info-subtle: #142844;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 8px 22px rgba(0, 0, 0, .45);
+  --shadow-3: 0 18px 46px rgba(0, 0, 0, .55);
+
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border);
+  --panel: var(--surface);
+  --purple: var(--brand);
+  --blue: var(--info);
+  --green: var(--success);
+  --amber: var(--warning);
+  --red: var(--danger);
+  --shadow: var(--shadow-2);
+}
+
+/* ===== 深色主题：跟随系统（未手动指定时） ===== */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0b1120;
+    --surface: #141d31;
+    --surface-raised: #1b2640;
+    --navy: #0a0f1c;
+    --navy-raised: #131c30;
+    --text-primary: #e8edf7;
+    --text-secondary: #9aa6bf;
+    --text-tertiary: #6c7890;
+    --border: #243049;
+    --border-strong: #33425d;
+    --brand: #8b7bff;
+    --brand-strong: #9d8fff;
+    --brand-subtle: #232347;
+    --success: #36c89c;
+    --success-subtle: #11342c;
+    --warning: #e3a63f;
+    --warning-subtle: #382c12;
+    --danger: #f06a78;
+    --danger-subtle: #3a1c20;
+    --info: #5b9bff;
+    --info-subtle: #142844;
+    --shadow-2: 0 8px 22px rgba(0, 0, 0, .45);
+    --shadow-3: 0 18px 46px rgba(0, 0, 0, .55);
+    --ink: var(--text-primary);
+    --muted: var(--text-secondary);
+    --line: var(--border);
+    --panel: var(--surface);
+    --purple: var(--brand);
+    --blue: var(--info);
+    --green: var(--success);
+    --amber: var(--warning);
+    --red: var(--danger);
+  }
 }

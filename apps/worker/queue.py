@@ -8,6 +8,7 @@ from typing import Any, TypeVar
 from uuid import UUID, uuid4
 
 from packages.observability import CorrelationContext, bind, current
+from packages.observability.tracing import tracer
 
 from .runtime import RuntimeWorker
 
@@ -15,15 +16,20 @@ T = TypeVar("T")
 
 
 def run_with_correlation(
-    context: CorrelationContext | None, operation: Callable[..., T], *args: Any
+    context: CorrelationContext | None,
+    trace_context: "SpanContext | None",
+    operation: Callable[..., T],
+    *args: Any,
 ) -> T:
-    """Run ``operation`` with the caller's correlation scope re-bound.
+    """Run ``operation`` with the caller's correlation and span scope re-bound.
 
     ``ThreadPoolExecutor`` does not copy ``contextvars`` into the worker thread,
-    so the scope is captured on the producing thread and re-bound here.
+    so both the correlation scope and the active span context are captured on the
+    producing thread and re-bound inside the worker thread.  This keeps the span
+    tree continuous across the queue boundary.
     """
 
-    with bind(context):
+    with bind(context), tracer.resume_from_context(trace_context):
         return operation(*args)
 
 
@@ -41,21 +47,27 @@ class InProcessTaskQueue:
     def enqueue(self, run_id: UUID) -> str:
         task_id = str(uuid4())
         if self.auto_run and self.worker is not None:
-            self._futures[task_id] = self._executor.submit(
-                run_with_correlation, current(), self.worker.run, run_id
-            )
+            trace_ctx = tracer.current_context()
+            with tracer.span("queue.enqueue", "queue", attributes={"run_id": str(run_id)}):
+                self._futures[task_id] = self._executor.submit(
+                    run_with_correlation, current(), trace_ctx, self.worker.run, run_id
+                )
         return task_id
 
     def enqueue_resume(self, run_id: UUID, decision: str) -> str:
         task_id = str(uuid4())
         if self.auto_run and self.worker is not None:
-            self._futures[task_id] = self._executor.submit(
-                run_with_correlation, current(), self.worker.resume, run_id, decision
-            )
+            trace_ctx = tracer.current_context()
+            with tracer.span("queue.enqueue_resume", "queue", attributes={"run_id": str(run_id)}):
+                self._futures[task_id] = self._executor.submit(
+                    run_with_correlation, current(), trace_ctx, self.worker.resume, run_id, decision
+                )
         return task_id
 
     def run_now(self, run_id: UUID) -> dict[str, object]:
-        return run_with_correlation(current(), self.worker.run, run_id)
+        trace_ctx = tracer.current_context()
+        with tracer.span("queue.enqueue", "queue", attributes={"run_id": str(run_id)}):
+            return run_with_correlation(current(), trace_ctx, self.worker.run, run_id)
 
     def cancel(self, task_id: str) -> bool:
         future = self._futures.get(task_id)
@@ -93,4 +105,6 @@ class CeleryTaskQueue:
 
 def _headers() -> dict[str, str] | None:
     scope = current()
-    return scope.to_headers() if scope is not None else None
+    headers = scope.to_headers() if scope is not None else {}
+    headers.update(tracer.to_headers())
+    return headers or None
