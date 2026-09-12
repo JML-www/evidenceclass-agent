@@ -88,19 +88,48 @@ jobs:
           cache: pip
 
       - name: Start MinIO
+        shell: bash
         run: |
-          docker run -d --name evidenceclass-minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER="$MINIO_ACCESS_KEY" \
-            -e MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \
-            minio/minio:RELEASE.2024-08-03T04-33-23Z server /data
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/live; then
-              exit 0
+          # Upstream MinIO ended community container distribution in October 2025, so
+          # minio/minio no longer resolves on Docker Hub or Quay. Use maintained,
+          # wire-compatible replacements: pgsty/silo keeps the MINIO_* variables, the
+          # /minio/* health routes, the on-disk format and the `server /data` entrypoint.
+          # The pinned release is tried first, with vendor-diverse fallbacks so a future
+          # tag removal cannot break this job the way minio/minio did.
+          images=(
+            "pgsty/silo:RELEASE.2026-09-03T13-18-01Z"
+            "pgsty/silo:latest"
+            "cgr.dev/chainguard/minio:latest"
+          )
+          # An explicit, world-writable data directory keeps every candidate image
+          # working whether it runs the server as root or as an unprivileged user.
+          data_dir="${RUNNER_TEMP:-/tmp}/evidenceclass-minio"
+          rm -rf "$data_dir"
+          mkdir -p "$data_dir"
+          chmod 0777 "$data_dir"
+          for image in "${images[@]}"; do
+            echo "Starting object storage from ${image}"
+            docker rm -f evidenceclass-minio >/dev/null 2>&1 || true
+            if ! docker run -d --name evidenceclass-minio \
+              -p 9000:9000 \
+              -v "$data_dir:/data" \
+              -e MINIO_ROOT_USER="$MINIO_ACCESS_KEY" \
+              -e MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \
+              "$image" server /data; then
+              echo "${image} could not be started; trying the next candidate."
+              continue
             fi
-            sleep 2
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent http://127.0.0.1:9000/minio/health/live; then
+                echo "Object storage is ready (${image})."
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "${image} never became healthy; trying the next candidate."
+            docker logs evidenceclass-minio || true
           done
-          docker logs evidenceclass-minio
+          echo "No MinIO-compatible image could be started." >&2
           exit 1
 
       - name: Install Python dependencies

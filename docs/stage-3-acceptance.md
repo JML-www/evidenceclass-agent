@@ -10,6 +10,13 @@ Credentials are required through the ignored `.env`; `.env.example` contains pla
 `scripts/accept-stage-3.ps1` writes a unique sentinel to every service, restarts all containers,
 and verifies that PostgreSQL, Redis, and MinIO retained it.
 
+The object-storage image is `pgsty/silo`, a maintained fork of the MinIO server. Upstream MinIO
+ended community container distribution in October 2025, so the previously pinned
+`minio/minio:RELEASE.2024-08-03T04-33-23Z` no longer resolves on any registry. The fork preserves
+the S3 API, the `MINIO_*` environment variables, the `/minio/*` health routes, the on-disk format
+and the `server /data` entrypoint, so the service definition, client code and sentinel check are
+unchanged. Immutable `RELEASE.*` tags stay available for pinning.
+
 The live test is `tests/integration/test_stage3_infrastructure.py`. It is skipped during offline
 unit runs and enabled only with `RUN_STAGE3_INFRA_TESTS=1`. GitHub Actions starts real service
 containers and enables it, so a missing local Docker installation cannot be confused with a
