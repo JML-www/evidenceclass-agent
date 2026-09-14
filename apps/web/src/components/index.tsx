@@ -2,6 +2,14 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { AgentStep, JobStatus } from '../types'
 import { statusText } from '../lib/constants'
+import {
+  IconAlert,
+  IconCheck,
+  IconEvidence,
+  IconInfo,
+  IconInbox,
+  IconRefresh,
+} from './icons'
 
 export function PageHeader({
   eyebrow,
@@ -45,8 +53,8 @@ export function Metric({
   label: string
   value: string | number
   hint: string
-  icon: string
-  tone?: string
+  icon: React.ReactNode
+  tone?: 'purple' | 'blue' | 'amber' | 'green' | 'danger'
 }) {
   return (
     <div className={`metric-card tone-${tone}`}>
@@ -83,7 +91,7 @@ export function BarMetric({
       <div className="bar-metric">
         <div>
           <span>{label}</span>
-          <b>暂无数据</b>
+          <b className="muted">暂无数据</b>
         </div>
         <div className="progress-track">
           <span className={color} style={{ width: '0%' }} />
@@ -113,7 +121,8 @@ export function Citation({ id, jobId }: { id: string; jobId?: string }) {
   }
   return (
     <button className="citation" onClick={go}>
-      ⌁ {id}
+      <IconEvidence size={13} />
+      {id}
     </button>
   )
 }
@@ -137,12 +146,8 @@ export function InfoBlock({
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="state-box">
+    <div className="state-box" role="status" aria-live="polite">
       <span className="spinner dark" />
-      <div className="skeleton-text" style={{ width: 220, marginTop: 4 }} aria-hidden="true">
-        <span className="skeleton" />
-        <span className="skeleton" style={{ width: '70%' }} />
-      </div>
       <p>{label}</p>
     </div>
   )
@@ -150,10 +155,13 @@ export function LoadingState({ label }: { label: string }) {
 
 export function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="state-box error-state">
-      <span>!</span>
+    <div className="state-box error-state" role="alert">
+      <span className="state-icon">
+        <IconAlert size={20} />
+      </span>
       <p>暂时无法加载数据</p>
       <button className="secondary-button" onClick={onRetry}>
+        <IconRefresh size={15} />
         重试
       </button>
     </div>
@@ -169,7 +177,9 @@ export function EmptyState({
 }) {
   return (
     <div className="state-box empty-state">
-      <span>◌</span>
+      <span className="state-icon">
+        <IconInbox size={20} />
+      </span>
       <p>{message ?? '还没有符合条件的任务'}</p>
       {onCreate && (
         <button className="primary-button" onClick={onCreate}>
@@ -185,13 +195,13 @@ export function StepRow({ step }: { step: AgentStep }) {
     <div className="step-row">
       <div className={`step-icon step-${step.status}`}>
         {step.status === 'completed' ? (
-          '✓'
+          <IconCheck size={13} />
         ) : step.status === 'running' ? (
           <span className="spinner" />
         ) : step.status === 'failed' ? (
-          '!'
+          <IconAlert size={13} />
         ) : (
-          '·'
+          <IconInfo size={12} />
         )}
       </div>
       <div className="step-content">

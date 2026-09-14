@@ -8,7 +8,8 @@ import {
   submitFeedback,
 } from '../../api/client'
 import type { Answer, ConversationMessage } from '../../types'
-import { Citation, EmptyState, ErrorState, LoadingState } from '../../components'
+import { Citation } from '../../components'
+import { IconSend, IconThumbsDown, IconThumbsUp } from '../../components/icons'
 
 export function InteractiveQa({ jobId }: { jobId: string }) {
   const [conversationId, setConversationId] = React.useState<string | null>(() =>
@@ -27,8 +28,7 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
     ;(async () => {
       try {
         const conversations = await listConversations(jobId)
-        const id =
-          conversationId ?? conversations.at(-1)?.conversation_id
+        const id = conversationId ?? conversations.at(-1)?.conversation_id
         if (!id) return
         const messages = await listMessages(id)
         const restored = pairMessages(messages)
@@ -51,11 +51,7 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
       const result = await getConversationSummary(conversationId)
       setSummary(String(result.summary ?? '暂无会话摘要'))
     } catch (requestError) {
-      setSummary(
-        requestError instanceof Error
-          ? requestError.message
-          : '摘要读取失败',
-      )
+      setSummary(requestError instanceof Error ? requestError.message : '摘要读取失败')
     }
   }
 
@@ -77,26 +73,18 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
       setAnswers(previous => [...previous, next])
       setQuestion('')
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : '问答请求失败',
-      )
+      setError(requestError instanceof Error ? requestError.message : '问答请求失败')
     } finally {
       setPending(false)
     }
   }
 
-  const sendFeedback = async (
-    answer: Answer,
-    decision: 'APPROVED' | 'REJECTED',
-  ) => {
+  const sendFeedback = async (answer: Answer, decision: 'APPROVED' | 'REJECTED') => {
     const key = answer.assistant_message.message_id
     try {
       await submitFeedback(jobId, {
         decision,
-        reason:
-          decision === 'APPROVED'
-            ? '问答引用核查通过'
-            : '问答回答需要改进',
+        reason: decision === 'APPROVED' ? '问答引用核查通过' : '问答回答需要改进',
         evidence_ids: answer.citations.map(item =>
           String(item.evidence_id ?? item.citation_id ?? ''),
         ),
@@ -108,10 +96,7 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
     } catch (requestError) {
       setFeedback(previous => ({
         ...previous,
-        [key]:
-          requestError instanceof Error
-            ? requestError.message
-            : '反馈提交失败',
+        [key]: requestError instanceof Error ? requestError.message : '反馈提交失败',
       }))
     }
   }
@@ -121,40 +106,36 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
       <div className="qa-messages">
         {answers.length === 0 && (
           <div className="state-box empty-state">
-            <span>⌁</span>
+            <span className="state-icon">
+              <IconSend size={20} />
+            </span>
             <p>输入问题，回答将只基于当前任务证据，并展示 Evidence ID。</p>
           </div>
         )}
+
         {answers.map(item => (
           <React.Fragment key={item.assistant_message.message_id}>
             <div className="question">{item.user_message.content}</div>
             <div className="answer">
-              <span className="brand-mark tiny">L</span>
-              <div>
+              <span className="brand-mark tiny">灵</span>
+              <div className="answer-body">
                 <p>{item.answer}</p>
                 <div className="citation-line">
-                  {item.citations.length
-                    ? item.citations.map(citation => (
-                        <Citation
-                          key={citation.evidence_id ?? citation.citation_id}
-                          id={String(
-                            citation.evidence_id ?? citation.citation_id,
-                          )}
-                          jobId={jobId}
-                        />
-                      ))
-                    : (
-                      <span className="evidence-unavailable">
-                        未找到足够证据
-                      </span>
-                    )}
+                  {item.citations.length ? (
+                    item.citations.map(citation => (
+                      <Citation
+                        key={citation.evidence_id ?? citation.citation_id}
+                        id={String(citation.evidence_id ?? citation.citation_id)}
+                        jobId={jobId}
+                      />
+                    ))
+                  ) : (
+                    <span className="evidence-unavailable">未找到足够证据</span>
+                  )}
                 </div>
                 <small className="muted">
-                  来源：{item.source} ·{' '}
-                  {item.evidence_available ? '证据可用' : '证据不足'}
-                  {item.limitations.length
-                    ? ` · ${item.limitations[0]}`
-                    : ''}
+                  来源：{item.source} · {item.evidence_available ? '证据可用' : '证据不足'}
+                  {item.limitations.length ? ` · ${item.limitations[0]}` : ''}
                 </small>
                 <div className="feedback-actions">
                   <button
@@ -162,6 +143,7 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
                     aria-label="有帮助"
                     onClick={() => sendFeedback(item, 'APPROVED')}
                   >
+                    <IconThumbsUp size={14} />
                     有帮助
                   </button>
                   <button
@@ -169,29 +151,31 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
                     aria-label="需要改进"
                     onClick={() => sendFeedback(item, 'REJECTED')}
                   >
+                    <IconThumbsDown size={14} />
                     需要改进
                   </button>
                   {feedback[item.assistant_message.message_id] && (
-                    <small className="muted">
-                      {feedback[item.assistant_message.message_id]}
-                    </small>
+                    <small className="muted">{feedback[item.assistant_message.message_id]}</small>
                   )}
                 </div>
               </div>
             </div>
           </React.Fragment>
         ))}
+
         {pending && (
           <div className="state-box">
             <span className="spinner dark" />
             <p>正在检索当前任务证据…</p>
           </div>
         )}
+
         {error && (
           <div className="form-error" role="alert">
             {error}
           </div>
         )}
+
         {summary && (
           <div className="summary-box">
             <b>会话摘要</b>
@@ -199,6 +183,7 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
           </div>
         )}
       </div>
+
       <div className="qa-toolbar">
         <button
           type="button"
@@ -209,7 +194,8 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
           读取会话摘要
         </button>
       </div>
-      <form className="qa-input" onSubmit={submit}>
+
+      <form className="qa-composer" onSubmit={submit}>
         <input
           aria-label="向报告提问"
           value={question}
@@ -217,12 +203,13 @@ export function InteractiveQa({ jobId }: { jobId: string }) {
           placeholder="询问这份报告中的任何结论…"
           disabled={pending}
         />
-        <button
-          className="primary-button"
-          type="submit"
-          disabled={pending || !question.trim()}
-        >
-          {pending ? '回答中…' : '发送'}
+        <button className="primary-button" type="submit" disabled={pending || !question.trim()}>
+          {pending ? '回答中…' : (
+            <>
+              <IconSend size={15} />
+              发送
+            </>
+          )}
         </button>
       </form>
     </>

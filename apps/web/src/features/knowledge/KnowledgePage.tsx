@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { isMockApi, listArtifacts, listAssets, listJobs } from '../../api/client'
 import { EmptyState, ErrorState, LoadingState, PageHeader } from '../../components'
+import { IconUpload } from '../../components/icons'
 
 type Asset = {
   id: string
@@ -67,35 +68,36 @@ export function KnowledgePage() {
 
   const assets: Asset[] = isMockApi
     ? SAMPLE_ASSETS
-    : ((assetsQuery.data ?? []) as Array<Record<string, unknown>>).map(
-        raw => ({
-          id: String(raw.asset_id ?? raw.id ?? ''),
-          name: String(raw.name ?? raw.filename ?? '未命名材料'),
-          type: String(raw.kind ?? raw.type ?? '参考材料'),
-          sizeBytes: Number(raw.size_bytes ?? raw.sizeBytes ?? 0),
-          uploadedAt: String(raw.uploaded_at ?? raw.uploadedAt ?? '未知时间'),
-        }),
-      )
+    : ((assetsQuery.data ?? []) as Array<Record<string, unknown>>).map(raw => ({
+        id: String(raw.asset_id ?? raw.id ?? ''),
+        name: String(raw.name ?? raw.filename ?? '未命名材料'),
+        type: String(raw.kind ?? raw.type ?? '参考材料'),
+        sizeBytes: Number(raw.size_bytes ?? raw.sizeBytes ?? 0),
+        uploadedAt: String(raw.uploaded_at ?? raw.uploadedAt ?? '未知时间'),
+      }))
 
   const hasArtifacts = (artifactsQuery.data ?? []).length > 0
 
   return (
     <div className="page">
       <PageHeader
-        eyebrow="KNOWLEDGE"
+        eyebrow="知识库"
         title="知识库"
         description={`已上传的参考材料（教学计划、转写、课程文档）。${jobId ? ` · ${jobId}` : ''}`}
         action={
           <button className="secondary-button" onClick={() => navigate('/new')}>
+            <IconUpload size={15} />
             上传新材料
           </button>
         }
       />
+
       {isMockApi && (
         <div className="success-note" role="status">
           当前为 Mock 模式，展示示例参考材料；接入后端后将读取真实资产列表。
         </div>
       )}
+
       <section className="panel">
         <div className="panel-toolbar">
           <b>{assets.length} 份参考材料</b>
@@ -113,11 +115,13 @@ export function KnowledgePage() {
           <AssetTable assets={assets} />
         )}
       </section>
+
       {hasArtifacts && (
-        <section className="panel side-note">
-          <h3>关联产物</h3>
+        <section className="panel side-note" style={{ marginTop: 'var(--space-4)' }}>
+          <h3 className="section-title">关联产物</h3>
           <p className="muted">
-            该分析任务还包含 {artifactsQuery.data?.length} 个产物（报告、看板、证据清单等），可在「结果与问答」中查看。
+            该分析任务还包含 {artifactsQuery.data?.length}{' '}
+            个产物（报告、看板、证据清单等），可在「结果与问答」中查看。
           </p>
         </section>
       )}

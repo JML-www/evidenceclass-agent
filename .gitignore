@@ -36,6 +36,7 @@ apps/web/vite.config.d.ts
 playwright-report/
 test-results/
 .vite/
+.shots/
 
 # 本地存储、训练输出
 storage/

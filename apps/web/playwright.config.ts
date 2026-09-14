@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Playwright 浏览器默认下载到系统盘（%LOCALAPPDATA%\ms-playwright）。本项目把它
+// 固定在 E 盘，避免占用 C 盘空间；若外部已设置该变量则尊重外部设置。
+process.env.PLAYWRIGHT_BROWSERS_PATH ??= 'E:/Data/DevData/ms-playwright'
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,

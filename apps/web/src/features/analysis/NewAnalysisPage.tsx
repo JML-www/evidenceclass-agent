@@ -12,6 +12,17 @@ import {
 } from '../../api/client'
 import type { Job } from '../../types'
 import { PageHeader } from '../../components'
+import {
+  IconCheck,
+  IconCheckCircle,
+  IconImage,
+  IconLayers,
+  IconNew,
+  IconSend,
+  IconShield,
+  IconUpload,
+  IconVideo,
+} from '../../components/icons'
 import { useToast } from '../../components/Toast'
 import { modeText } from '../../lib/constants'
 
@@ -22,6 +33,30 @@ const FLOW_STEPS = [
   '人工复核与结果导出',
 ]
 const FLOW_HINTS = ['约 10 秒', '按素材时长', '自动执行', '可选']
+
+const MODE_DESC: Record<Job['mode'], string> = {
+  VIDEO: '抽帧、ASR 与行为观察',
+  IMAGE: '板书或课堂快照',
+  STRUCTURED: '直接提交结构化特征',
+}
+
+const MODE_ACCEPT: Record<Job['mode'], string> = {
+  VIDEO: 'video/*',
+  IMAGE: 'image/*',
+  STRUCTURED: '.json,.csv',
+}
+
+const MODE_HINT: Record<Job['mode'], string> = {
+  VIDEO: 'MP4、MOV，最大 2GB',
+  IMAGE: 'PNG、JPG，最大 20MB',
+  STRUCTURED: 'JSON、CSV，最大 10MB',
+}
+
+function ModeIcon({ mode }: { mode: Job['mode'] }) {
+  if (mode === 'VIDEO') return <IconVideo size={16} />
+  if (mode === 'IMAGE') return <IconImage size={16} />
+  return <IconLayers size={16} />
+}
 
 export function NewAnalysisPage() {
   const navigate = useNavigate()
@@ -97,23 +132,19 @@ export function NewAnalysisPage() {
       navigate(`/runs/${job.id}`)
     } catch (error) {
       setSubmitted(false)
-      setSubmitError(
-        error instanceof Error ? error.message : '创建分析失败',
-      )
-      toast.notify(
-        `创建失败：${error instanceof Error ? error.message : '未知错误'}`,
-        'danger',
-      )
+      setSubmitError(error instanceof Error ? error.message : '创建分析失败')
+      toast.notify(`创建失败：${error instanceof Error ? error.message : '未知错误'}`, 'danger')
     }
   }
 
   return (
     <div className="page narrow">
       <PageHeader
-        eyebrow="NEW ANALYSIS"
+        eyebrow="新建分析"
         title="新建分析"
         description="上传课堂素材，Agent 会生成带时间戳的可核查证据。"
       />
+
       <form className="form-layout" onSubmit={submit}>
         <section className="panel form-panel">
           <h2>选择分析模式</h2>
@@ -122,31 +153,29 @@ export function NewAnalysisPage() {
               <button
                 type="button"
                 key={value}
-                className={
-                  mode === value ? 'mode-card selected' : 'mode-card'
-                }
+                className={mode === value ? 'mode-card selected' : 'mode-card'}
+                aria-pressed={mode === value}
                 onClick={() => {
                   setMode(value)
                   setFile(null)
                 }}
               >
                 <span className="mode-icon">
-                  {value === 'VIDEO' ? '▶' : value === 'IMAGE' ? '▧' : '≡'}
+                  <ModeIcon mode={value} />
                 </span>
                 <span>
                   <b>{modeText[value]}</b>
-                  <small>
-                    {value === 'VIDEO'
-                      ? '抽帧、ASR 与行为观察'
-                      : value === 'IMAGE'
-                        ? '板书或课堂快照'
-                        : '直接提交结构化特征'}
-                  </small>
+                  <small>{MODE_DESC[value]}</small>
                 </span>
-                {mode === value && <span className="check">✓</span>}
+                {mode === value && (
+                  <span className="check">
+                    <IconCheck size={14} />
+                  </span>
+                )}
               </button>
             ))}
           </div>
+
           <label className="field-label" htmlFor="title">
             分析名称<span>（可选）</span>
           </label>
@@ -156,6 +185,7 @@ export function NewAnalysisPage() {
             onChange={event => setTitle(event.target.value)}
             placeholder="例如：高一数学 · 函数单调性"
           />
+
           <label className="field-label" htmlFor="media">
             上传媒体
           </label>
@@ -163,30 +193,28 @@ export function NewAnalysisPage() {
             <input
               id="media"
               type="file"
-              accept={mode === 'VIDEO' ? 'video/*' : mode === 'IMAGE' ? 'image/*' : '.json,.csv'}
+              accept={MODE_ACCEPT[mode]}
               onChange={event => setFile(event.target.files?.[0] ?? null)}
             />
             {file ? (
               <>
-                <span className="upload-icon success">✓</span>
+                <span className="upload-icon success">
+                  <IconCheckCircle size={22} />
+                </span>
                 <b>{file.name}</b>
                 <small>{(file.size / 1024 / 1024).toFixed(2)} MB · 已就绪</small>
               </>
             ) : (
               <>
-                <span className="upload-icon">↥</span>
+                <span className="upload-icon">
+                  <IconUpload size={22} />
+                </span>
                 <b>拖拽文件到这里，或点击选择</b>
-                <small>
-                  支持{' '}
-                  {mode === 'VIDEO'
-                    ? 'MP4、MOV，最大 2GB'
-                    : mode === 'IMAGE'
-                      ? 'PNG、JPG，最大 20MB'
-                      : 'JSON、CSV，最大 10MB'}
-                </small>
+                <small>支持 {MODE_HINT[mode]}</small>
               </>
             )}
           </label>
+
           <label className="field-label" htmlFor="context-media">
             教学计划或转写<span>（可选）</span>
           </label>
@@ -202,18 +230,23 @@ export function NewAnalysisPage() {
             />
             {contextFile ? (
               <>
-                <span className="upload-icon success">✓</span>
+                <span className="upload-icon success">
+                  <IconCheckCircle size={20} />
+                </span>
                 <b>{contextFile.name}</b>
                 <small>辅助语境材料 · 已就绪</small>
               </>
             ) : (
               <>
-                <span className="upload-icon">＋</span>
+                <span className="upload-icon">
+                  <IconNew size={20} />
+                </span>
                 <b>添加教学计划、讲义或转写</b>
                 <small>可选，用于补充分析语境</small>
               </>
             )}
           </label>
+
           {submitted && (
             <div className="upload-progress">
               <div className="progress-track">
@@ -222,13 +255,17 @@ export function NewAnalysisPage() {
               <small>{progress < 100 ? `上传中 ${progress}%` : '上传完成'}</small>
             </div>
           )}
+
           {submitError && (
             <div className="form-error" role="alert">
               {submitError}
             </div>
           )}
+
           <div className="privacy-note">
-            <span>⌾</span>
+            <span>
+              <IconShield size={16} />
+            </span>
             <p>
               <b>隐私与能力边界</b>
               <br />
@@ -236,14 +273,19 @@ export function NewAnalysisPage() {
               Evidence。
             </p>
           </div>
-          <button
-            className="primary-button submit-button"
-            type="submit"
-            disabled={submitted}
-          >
-            {submitted ? '正在创建任务…' : '开始分析 →'}
+
+          <button className="primary-button submit-button" type="submit" disabled={submitted}>
+            {submitted ? (
+              '正在创建任务…'
+            ) : (
+              <>
+                开始分析
+                <IconSend size={15} />
+              </>
+            )}
           </button>
         </section>
+
         <aside className="panel side-note">
           <h3>分析流程</h3>
           {FLOW_STEPS.map((step, index) => (

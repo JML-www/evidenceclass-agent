@@ -2,12 +2,14 @@ import React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { decideReview, listReviewItems } from '../../api/client'
 import type { ReviewItem } from '../../types'
+import { EmptyState, KeyValue, LoadingState, PageHeader } from '../../components'
 import {
-  EmptyState,
-  KeyValue,
-  LoadingState,
-  PageHeader,
-} from '../../components'
+  IconCheck,
+  IconChevronRight,
+  IconPlay,
+  IconSort,
+  IconVideo,
+} from '../../components/icons'
 
 export function ReviewPage() {
   const queryClient = useQueryClient()
@@ -27,9 +29,7 @@ export function ReviewPage() {
     .sort((a, b) => {
       const left = String(a.created_at ?? a.review_id)
       const right = String(b.created_at ?? b.review_id)
-      return sortDescending
-        ? right.localeCompare(left)
-        : left.localeCompare(right)
+      return sortDescending ? right.localeCompare(left) : left.localeCompare(right)
     })
   const current = items[selected] ?? items[0]
 
@@ -68,22 +68,21 @@ export function ReviewPage() {
       setRevisedText('')
       await queryClient.invalidateQueries({ queryKey: ['reviews'] })
     } catch (error) {
-      setDecisionState(
-        error instanceof Error ? error.message : '提交失败',
-      )
+      setDecisionState(error instanceof Error ? error.message : '提交失败')
     } finally {
       setPendingDecision(false)
     }
   }
 
   return (
-    <div className="page full-height">
+    <div className="page">
       <PageHeader
-        eyebrow="HUMAN IN THE LOOP"
+        eyebrow="人工复核"
         title="复核工作台"
         description="确认、修正或拒绝模型观察；每次决策都会保留原值与修订值。"
         action={<span className="review-counter">待处理 {items.length}</span>}
       />
+
       {reviewQuery.isLoading ? (
         <LoadingState label="正在加载复核队列…" />
       ) : current ? (
@@ -96,15 +95,13 @@ export function ReviewPage() {
                 aria-label="排序"
                 onClick={() => setSortDescending(value => !value)}
               >
-                ⇅
+                <IconSort size={16} />
               </button>
             </div>
             {items.map((item, index) => (
               <button
                 key={item.review_id}
-                className={
-                  selected === index ? 'queue-item selected' : 'queue-item'
-                }
+                className={selected === index ? 'queue-item selected' : 'queue-item'}
                 onClick={() => {
                   setSelected(index)
                   setNote('')
@@ -119,28 +116,26 @@ export function ReviewPage() {
                     {item.evidence_ids[0] ?? item.review_id} ·{' '}
                     {read(item, 'time', '未知时间')}
                   </small>
-                  <span className="risk-pill">
-                    {read(item, 'score', '待评估')}
-                  </span>
+                  <span className="risk-pill">{read(item, 'score', '待评估')}</span>
                 </div>
-                <span>›</span>
+                <span>
+                  <IconChevronRight size={16} />
+                </span>
               </button>
             ))}
           </section>
+
           <section className="panel review-media">
             <div className="media-frame tall">
               <div className="frame-overlay">
                 视频上下文 · {read(current, 'time', '未知时间')}
               </div>
-              <div className="classroom-illustration">
-                <div className="board" />
-                <div className="desk-row one" />
-                <div className="desk-row two" />
-                <div className="desk-row three" />
-                <span className="focus-ring" />
+              <div className="media-placeholder">
+                <IconVideo size={26} />
+                <span>视频上下文占位 · 仅用于人工对照</span>
               </div>
               <div className="video-controls">
-                <span>▶</span>
+                <IconPlay size={14} />
                 <div className="progress-track">
                   <span style={{ width: '38%' }} />
                 </div>
@@ -153,19 +148,14 @@ export function ReviewPage() {
               <span>后 10 秒</span>
             </div>
           </section>
+
           <section className="panel decision-panel">
-            <span className="eyebrow">
-              {current.review_id} · 模型观察
-            </span>
+            <span className="eyebrow">{current.review_id} · 模型观察</span>
             <h2>{read(current, 'title', '模型观察')}</h2>
-            <p className="decision-copy">
-              {read(current, 'text', current.reason)}
-            </p>
+            <p className="decision-copy">{read(current, 'text', current.reason)}</p>
+
             <div className="decision-grid">
-              <KeyValue
-                label="模型值"
-                value={read(current, 'model_value', '未提供')}
-              />
+              <KeyValue label="模型值" value={read(current, 'model_value', '未提供')} />
               <KeyValue
                 label="置信度"
                 value={`${Math.round(
@@ -174,11 +164,10 @@ export function ReviewPage() {
               />
               <KeyValue
                 label="来源"
-                value={
-                  read(current, 'source', current.evidence_ids.join(', ') || 'unknown')
-                }
+                value={read(current, 'source', current.evidence_ids.join(', ') || 'unknown')}
               />
             </div>
+
             <label className="field-label" htmlFor="review-reason">
               审核理由
             </label>
@@ -188,6 +177,7 @@ export function ReviewPage() {
               onChange={event => setNote(event.target.value)}
               placeholder="补充你确认或修正的依据…"
             />
+
             <label className="field-label" htmlFor="revised-observation">
               修订观察<span>（点击“修正字段”时生效）</span>
             </label>
@@ -197,6 +187,7 @@ export function ReviewPage() {
               onChange={event => setRevisedText(event.target.value)}
               placeholder={read(current, 'text', '填写修订后的观察')}
             />
+
             <div className="decision-actions">
               <button
                 className="secondary-button"
@@ -224,12 +215,13 @@ export function ReviewPage() {
                 disabled={pendingDecision}
                 onClick={() => onDecision('APPROVED')}
               >
-                确认并继续 ✓
+                确认并继续
+                <IconCheck size={15} />
               </button>
             </div>
+
             <small className="audit-note">
-              {decisionState ||
-                '提交后将写入审计日志，并恢复等待中的 Agent 节点。'}
+              {decisionState || '提交后将写入审计日志，并恢复等待中的 Agent 节点。'}
             </small>
           </section>
         </div>

@@ -1,5 +1,6 @@
 import React from 'react'
 import { InfoBlock, PageHeader } from '../../components'
+import { IconEvaluation, IconInfo } from '../../components/icons'
 
 // 数据集定义来自 evals/datasets/manifest.v1.json（参考内容，非评测指标）。
 const DATASETS = [
@@ -37,14 +38,17 @@ export function EvaluationPage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="EVALUATION"
+        eyebrow="评测"
         title="评测中心"
         description="基于可观测标签的离线评测数据集与评测口径说明。"
       />
+
       <div className="metric-grid">
         {DATASETS.map(dataset => (
           <div className="metric-card tone-purple" key={dataset.key}>
-            <span className="metric-icon">◈</span>
+            <span className="metric-icon">
+              <IconEvaluation size={17} />
+            </span>
             <div>
               <span>
                 {dataset.name} · {dataset.enName}
@@ -79,20 +83,20 @@ export function EvaluationPage() {
       </section>
 
       <section className="panel eval-section">
-        <div className="panel-toolbar">
+        <div className="panel-header">
           <h2>指标定义</h2>
         </div>
-        {METRIC_DEFINITIONS.map(metric => (
-          <InfoBlock
-            key={metric.name}
-            title={metric.name}
-            text={metric.description}
-          />
-        ))}
+        <div className="panel-body stack">
+          {METRIC_DEFINITIONS.map(metric => (
+            <InfoBlock key={metric.name} title={metric.name} text={metric.description} />
+          ))}
+        </div>
       </section>
 
       <section className="panel eval-section callout">
-        <span>ⓘ</span>
+        <span>
+          <IconInfo size={16} />
+        </span>
         <div>
           <b>最近一次评测结果</b>
           <p>

@@ -10,6 +10,7 @@ import {
   LoadingState,
   PageHeader,
 } from '../../components'
+import { IconAlert, IconDownload, IconExternal } from '../../components/icons'
 import { InteractiveQa } from './InteractiveQa'
 
 type AnalysisMetric = {
@@ -51,8 +52,7 @@ export function ResultsPage() {
     artifacts.find(item => String(item.mime).includes('markdown'))
   const resultArtifact = artifacts.find(
     item =>
-      String(item.kind) === 'analysis_result' ||
-      String(item.mime) === 'application/json',
+      String(item.kind) === 'analysis_result' || String(item.mime) === 'application/json',
   )
 
   const analysisQuery = useQuery({
@@ -80,9 +80,7 @@ export function ResultsPage() {
     }
     const anchor = document.createElement('a')
     anchor.href = String(url)
-    anchor.download = `${report?.kind ?? 'report'}.${
-      String(report?.mime).includes('html') ? 'html' : 'md'
-    }`
+    anchor.download = `${report?.kind ?? 'report'}.${String(report?.mime).includes('html') ? 'html' : 'md'}`
     anchor.target = '_blank'
     anchor.click()
     setArtifactMessage('报告下载已开始')
@@ -102,25 +100,29 @@ export function ResultsPage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="RESULT"
+        eyebrow="结果"
         title="结果与问答"
         description={`本次课堂分析 · ${jobId}`}
         action={
           <div className="header-actions">
             <button className="secondary-button" onClick={openReport}>
+              <IconExternal size={15} />
               查看原始报告
             </button>
             <button className="primary-button" onClick={downloadReport}>
-              下载报告 ↓
+              <IconDownload size={15} />
+              下载报告
             </button>
           </div>
         }
       />
+
       {artifactMessage && (
         <div className="success-note" role="status">
           {artifactMessage}
         </div>
       )}
+
       <div className="result-grid">
         {analysisQuery.isLoading ? (
           <LoadingState label="正在载入分析产物…" />
@@ -128,9 +130,7 @@ export function ResultsPage() {
           <ErrorState onRetry={() => analysisQuery.refetch()} />
         ) : !data ? (
           <section className="panel">
-            <EmptyState
-              message="当前任务暂无 AnalysisResult 产物，无法渲染真实指标。"
-            />
+            <EmptyState message="当前任务暂无 AnalysisResult 产物，无法渲染真实指标。" />
           </section>
         ) : (
           <section className="panel result-overview">
@@ -152,46 +152,29 @@ export function ResultsPage() {
               <div
                 className="ring-chart"
                 style={{
-                  background: `radial-gradient(var(--surface) 58%, transparent 59%), conic-gradient(var(--purple) ${
-                    participationScore != null
-                      ? Math.round(participationScore)
-                      : 0
-                  }%, var(--border) 0)`,
+                  background: `radial-gradient(var(--surface) 62%, transparent 63%), conic-gradient(var(--accent) ${
+                    participationScore != null ? Math.round(participationScore) : 0
+                  }%, var(--surface-subtle) 0)`,
                 }}
               >
                 <span>
-                  {participationScore != null
-                    ? `${Math.round(participationScore)}%`
-                    : '—'}
+                  {participationScore != null ? `${Math.round(participationScore)}%` : '—'}
                 </span>
               </div>
             </div>
             <div className="bar-metrics">
-              <BarMetric
-                label="注意力"
-                value={metrics.focus ?? null}
-                color="blue"
-              />
-              <BarMetric
-                label="互动"
-                value={metrics.interaction ?? null}
-                color="amber"
-              />
-              <BarMetric
-                label="任务参与"
-                value={metrics.participation ?? null}
-                color="green"
-              />
+              <BarMetric label="注意力" value={metrics.focus ?? null} color="blue" />
+              <BarMetric label="互动" value={metrics.interaction ?? null} color="amber" />
+              <BarMetric label="任务参与" value={metrics.participation ?? null} color="green" />
             </div>
           </section>
         )}
+
         <section className="panel">
           <div className="panel-toolbar">
             <h2>关键发现</h2>
             {evidenceItems.length > 0 && (
-              <span className="review-state review-pending">
-                {evidenceItems.length} 条证据
-              </span>
+              <span className="review-state review-pending">{evidenceItems.length} 条证据</span>
             )}
           </div>
           {evidenceItems.length === 0 ? (
@@ -199,19 +182,21 @@ export function ResultsPage() {
           ) : (
             evidenceItems.slice(0, 4).map(item => (
               <div className="finding" key={item.evidence_id}>
-                <span className="finding-icon blue">↗</span>
+                <span className="finding-icon">
+                  <IconExternal size={14} />
+                </span>
                 <div>
                   <b>{item.observation ?? '未命名观察'}</b>
-                  {item.evidence_id && (
-                    <Citation id={String(item.evidence_id)} jobId={jobId} />
-                  )}
+                  {item.evidence_id && <Citation id={String(item.evidence_id)} jobId={jobId} />}
                 </div>
               </div>
             ))
           )}
           {actions.length > 0 && (
             <div className="finding">
-              <span className="finding-icon amber">!</span>
+              <span className="finding-icon">
+                <IconAlert size={14} />
+              </span>
               <div>
                 <b>行动建议</b>
                 <p>
@@ -225,13 +210,12 @@ export function ResultsPage() {
             </div>
           )}
         </section>
+
         <section className="panel qa-panel">
           <div className="panel-toolbar">
             <div>
               <h2>报告问答</h2>
-              <small className="muted">
-                Evidence-first · 仅基于当前任务证据
-              </small>
+              <small className="muted">Evidence-first · 仅基于当前任务证据</small>
             </div>
           </div>
           <InteractiveQa jobId={jobId} />

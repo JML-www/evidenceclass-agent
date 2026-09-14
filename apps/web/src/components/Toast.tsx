@@ -1,4 +1,5 @@
 import React from 'react'
+import { IconAlert, IconCheck, IconInfo, IconX } from './icons'
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger'
 
@@ -14,11 +15,11 @@ type ToastContextValue = {
 
 const ToastContext = React.createContext<ToastContextValue | null>(null)
 
-const ICONS: Record<ToastTone, string> = {
-  info: 'i',
-  success: '✓',
-  warning: '!',
-  danger: '×',
+const ICONS: Record<ToastTone, React.ReactNode> = {
+  info: <IconInfo size={13} />,
+  success: <IconCheck size={13} />,
+  warning: <IconAlert size={13} />,
+  danger: <IconX size={13} />,
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -78,7 +79,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               aria-label="关闭通知"
               onClick={() => dismiss(item.id)}
             >
-              ×
+              <IconX size={14} />
             </button>
           </div>
         ))}
