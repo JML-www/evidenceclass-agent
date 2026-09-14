@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import re
 import time
-from collections.abc import Generator
 from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any
@@ -25,11 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.auth import TokenService, hash_password, verify_password
 from apps.api.config import AppSettings
-from apps.api.event_bus import (
-    TERMINAL_EVENT_TYPES,
-    NotificationBus,
-    NotifyingJobEventService,
-)
+from apps.api.event_bus import NotificationBus, NotifyingJobEventService
 from apps.api.schemas import (
     AnswerResponse,
     ArtifactResponse,
@@ -55,6 +48,7 @@ from apps.api.schemas import (
     UploadInitRequest,
     UploadInitResponse,
 )
+from apps.api.sse import stream_job_events
 from apps.worker.admission import AdmissionLimits, QueueGuard, estimate_task
 from apps.worker.queue import CeleryTaskQueue, InProcessTaskQueue
 from apps.worker.runtime import RuntimeWorker
@@ -857,49 +851,15 @@ def create_app(
         with session_factory() as session:
             get_job(session, job_id, workspace_id)
         heartbeat_seconds = max(1, int(getattr(settings, "sse_heartbeat_seconds", 15)))
-        subscriber = bus.subscribe(job_id)
-
-        def frame(row: dict[str, Any]) -> str:
-            data = json.dumps(row, ensure_ascii=False)
-            return f"id: {row['event_id']}\nevent: {row['type']}\ndata: {data}\n\n"
-
-        async def stream() -> Generator[str, None, None]:
-            try:
-                last_id = last_event_id
-                # Replay everything already persisted after the client's cursor so
-                # a reconnect resumes exactly where Last-Event-ID left off.
-                rows = events.list_after(job_id=job_id, last_event_id=last_id)
-                for row in rows:
-                    if await request.is_disconnected():
-                        return
-                    yield frame(row)
-                    last_id = max(last_id, int(row["event_id"]))
-                # The job may already be terminal when the client (re)connects.
-                if any(row["type"] in TERMINAL_EVENT_TYPES for row in rows):
-                    return
-                # Live tail: a bus notification means new rows were committed, so
-                # re-read the durable log and push them. This is push, not poll.
-                while True:
-                    if await request.is_disconnected():
-                        return
-                    try:
-                        await asyncio.wait_for(
-                            subscriber.queue.get(), timeout=heartbeat_seconds
-                        )
-                    except asyncio.TimeoutError:
-                        yield ": heartbeat\n\n"
-                        continue
-                    new_rows = events.list_after(job_id=job_id, last_event_id=last_id)
-                    for row in new_rows:
-                        yield frame(row)
-                        last_id = max(last_id, int(row["event_id"]))
-                    if any(row["type"] in TERMINAL_EVENT_TYPES for row in new_rows):
-                        return
-            finally:
-                bus.unsubscribe(job_id, subscriber)
-
         return StreamingResponse(
-            stream(),
+            stream_job_events(
+                job_id=job_id,
+                last_event_id=last_event_id,
+                request=request,
+                events=events,
+                bus=bus,
+                heartbeat_seconds=heartbeat_seconds,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
